@@ -18,7 +18,7 @@ controls = {
     "n": "N"
 }
 
-controls_keyup = {"w": "0", "a": "0", "s": "0", "d": "0","m":"0","n":"0"}
+controls_keyup = {"w": "S", "a": "S", "s": "S", "d": "S","m":"S","n":"S"}
 
 # -----------------------------
 # App Class
@@ -106,9 +106,10 @@ class RobotRemoteApp(ctk.CTk):
         if self.connected and self.bt:
             try:
                 self.bt.write(str(data).encode())
-                self.log_to_terminal(f"Sent: {data}")
+                # self.log_to_terminal(f"Sent: {data}")
             except Exception as e:
                 self.error_var.set(f"Send failed: {e}")
+                return
         else:
             self.error_var.set("Not connected to Bluetooth.")
 
