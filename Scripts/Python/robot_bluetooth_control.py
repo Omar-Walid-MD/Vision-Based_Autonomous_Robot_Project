@@ -105,11 +105,15 @@ class RobotRemoteApp(ctk.CTk):
     def send_to_bluetooth(self, data):
         if self.connected and self.bt:
             try:
-                self.bt.write(str(data).encode())
+                self.bt.write(str(data+"\0").encode())
                 # self.log_to_terminal(f"Sent: {data}")
-            except Exception as e:
-                self.error_var.set(f"Send failed: {e}")
-                return
+            except (OSError, ConnectionError, BrokenPipeError) as e:
+                print(f"[Bluetooth Error] {e}")
+                # Optional: mark connection as lost
+                self.bluetooth_socket = None
+                # Update UI so the user knows
+                self.status_label.configure(text="⚠️ Disconnected", text_color="red")
+
         else:
             self.error_var.set("Not connected to Bluetooth.")
 
