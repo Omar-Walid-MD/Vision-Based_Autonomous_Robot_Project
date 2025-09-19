@@ -119,7 +119,7 @@ class RobotRemoteApp(ctk.CTk):
 
     def receive_bluetooth(self):
         while self.connected and not self.stop_threads:
-            try:
+            try:    
                 if self.bt.in_waiting:
                     data = self.bt.readline().decode(errors="ignore").strip()
                     if data:
