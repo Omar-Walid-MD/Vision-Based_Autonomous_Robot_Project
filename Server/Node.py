@@ -1,7 +1,7 @@
 import socketio
 
 class Node:
-    def __init__(self, node_name, on_get_data=None):
+    def __init__(self, node_name, url="http://localhost:5000", on_get_data=None):
         self.sio = socketio.Client()
 
         self.node_name = node_name
@@ -21,7 +21,7 @@ class Node:
             
         def tryconnect():
             try:
-                self.sio.connect('http://localhost:5000')
+                self.sio.connect(url)
             except Exception as e:
                 print(f"SocketIO error: {e}")
                 
