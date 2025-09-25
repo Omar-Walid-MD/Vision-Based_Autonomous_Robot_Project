@@ -1,11 +1,11 @@
 import socketio
 
 class Node:
-    def __init__(self, node_name, url="http://localhost:5000", on_get_data=None):
+    def __init__(self, node_name, url="http://localhost:5000"):
         self.sio = socketio.Client()
 
         self.node_name = node_name
-        self.on_get_data = on_get_data
+        self.topics = {}
         
         @self.sio.event
         def connect():
@@ -14,9 +14,10 @@ class Node:
 
         @self.sio.event
         def get_data(data):
-            print(data)
-            if self.on_get_data is not None:
-                self.on_get_data(data)
+            topic, payload = data
+            topicFunction = self.topics.get(topic,None)
+            if topicFunction is not None:
+                topicFunction(payload)
                 
             
         def tryconnect():
@@ -27,7 +28,13 @@ class Node:
                 
         tryconnect()
         
-    def send(self,target,data):
-        self.sio.emit("send_data",[target,data])
+    def send(self,topic,data):
+        self.sio.emit("send_data",[topic,data])
+    
+    def subscribe(self,topic,function):
+        self.sio.emit("join_topic", topic)
+        self.topics[topic] = function
+
+        
 
     

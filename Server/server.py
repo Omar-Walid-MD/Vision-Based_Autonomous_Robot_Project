@@ -58,14 +58,25 @@ async def disconnect(sid):
 async def connect_node(sid, node):
     print_log(f"Module '{node}' connected ({sid})")
     nodes_status[node] = sid
+    
+@sio.event
+async def join_topic(sid, topic):
+    await sio.enter_room(sid=sid,room=topic)
+    print_log(f"({sid}) Subscribed to topic: {topic}")
+    
 
 @sio.event
 async def send_data(sid, data):
-    target_sid = nodes_status.get(data[0],None)
-    if target_sid is not None:
-        sender_node = get_node(sid)
-        print_log(sender_node+" "+target_sid)
-        await sio.emit("get_data",{"sender":sender_node,"message":data[1]},to=target_sid)
+    topic, payload = data
+    print_log(f"sending to room {topic}")
+    await sio.emit("get_data",[topic,payload],to=topic)
+
+    
+    
+    # target_sid = nodes_status.get(data[0],None)
+    # if target_sid is not None:
+    #     sender_node = get_node(sid)
+    #     print_log(sender_node+" "+target_sid)
 
 
 # FUNCTIONS

@@ -6,7 +6,7 @@ import time
 # -----------------------------
 # Configuration
 # -----------------------------
-SERIAL_PORT = "COM7"
+SERIAL_PORT = "COM3"
 BAUD_RATE = 9600
 
 controls = {
