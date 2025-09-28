@@ -11,3 +11,6 @@ dist/
 __pycache__/
 *.pyc
 
+# Ignore Camera Callibration
+*.npz
+calib_images/
