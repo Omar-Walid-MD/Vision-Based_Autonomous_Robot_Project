@@ -1,7 +1,7 @@
 import os
 import sys
 # Add MinGW bin folder to DLL search path
-# os.add_dll_directory(r"D:\msys2\mingw64\bin")
+os.add_dll_directory(r"D:\msys2\mingw64\bin")
 import pathfinding
 
 # Define the grid (must be 9x10 because ROW=9, COL=10 in your C++ code)
