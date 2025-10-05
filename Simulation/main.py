@@ -6,7 +6,7 @@ import math
 import json
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))) # add parent folder to paths
 from Pathfinding import aStarSearch
 
 this_directory = os.path.dirname(os.path.abspath(__file__))
@@ -77,9 +77,12 @@ class MyApp(ShowBase):
         alnp = self.render.attachNewNode(alight)
         self.render.setLight(alnp)
         
-        self.grid = []
         with open(os.path.join(this_directory,"./grid.json"),"r") as grid:
-            self.grid = json.load(grid)["grid"]
+            data = json.load(grid)
+            self.grid = data["grid"]
+            self.cellSize = data["cellSize"]
+            self.size = data["size"]
+            
         
         start = [1,1]
         end = [30,30]
@@ -87,7 +90,7 @@ class MyApp(ShowBase):
         start = start[-1::-1]
         end = end[-1::-1]
         points = aStarSearch(self.grid,start,end)
-        points = [[p[1]*0.5,16-p[0]*0.5] for p in points]
+        points = [[p[1]*self.cellSize,(self.size[1]-p[0])*self.cellSize] for p in points]
         self.addPointMarkers()
         
         self.tags = []
