@@ -2,12 +2,13 @@ from direct.showbase.ShowBase import ShowBase
 from panda3d.core import loadPrcFileData, DirectionalLight, AmbientLight, Vec3
 from direct.task import Task
 from Tag import Tag
+import time
 import math
 import json
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))) # add parent folder to paths
-from Pathfinding import aStarSearch
+from pathfinding import aStarSearch
 
 this_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -25,6 +26,7 @@ point_index = 0
 
 move_speed = 2
 rotation_speed = 180
+robot_size = 0.25
 
 def normalize_vector(vector):
     sum_of_squares = sum(x**2 for x in vector)
@@ -52,9 +54,15 @@ class MyApp(ShowBase):
                 
         self.disableMouse()
         
+        with open(os.path.join(this_directory,"./grid.json"),"r") as grid:
+            data = json.load(grid)
+            self.grid = data["grid"]
+            self.cellSize = data["cellSize"]
+            self.size = data["size"]
+        
         env = self.loader.loadModel("./models/model.obj")
         env.reparentTo(self.render)
-        env.setPos(-0.25,16.25,0)
+        env.setPos(0,0,0)
         env.setHpr(0,90,0)
         
         self.robot = self.loader.loadModel("./models/robot.obj")
@@ -62,7 +70,6 @@ class MyApp(ShowBase):
         self.robot.setPos(2,2,0)
         self.robot.setHpr(-90,0,0)
         self.robot.setScale(0.75,0.75,0.75)
-        
         
         base.cam.setHpr(0, -90, 0)
         
@@ -77,20 +84,11 @@ class MyApp(ShowBase):
         alnp = self.render.attachNewNode(alight)
         self.render.setLight(alnp)
         
-        with open(os.path.join(this_directory,"./grid.json"),"r") as grid:
-            data = json.load(grid)
-            self.grid = data["grid"]
-            self.cellSize = data["cellSize"]
-            self.size = data["size"]
-            
-        
         start = [1,1]
         end = [30,30]
         
-        start = start[-1::-1]
-        end = end[-1::-1]
         points = aStarSearch(self.grid,start,end)
-        points = [[p[1]*self.cellSize,(self.size[1]-p[0])*self.cellSize] for p in points]
+        points = [[p[0]*self.cellSize+robot_size,-p[1]*self.cellSize-robot_size] for p in points]
         self.addPointMarkers()
         
         self.tags = []
@@ -102,15 +100,14 @@ class MyApp(ShowBase):
         
         self.position = (points[0][0],points[0][1],0)
         self.robot.setPos(self.position)
-        base.cam.setPos(self.position[0],self.position[1],30)
+        base.cam.setPos(self.position[0],self.position[1],20)
 
     
     def update(self, task):
         global point_index
         if point_index >= len(points) - 1:
             return Task.done
-    
-        
+            
         current = points[point_index]
         target = points[point_index + 1]
         current_pos = Vec3(current[0], current[1], 0)
@@ -122,6 +119,7 @@ class MyApp(ShowBase):
             rotation_angle -= 360
         while rotation_angle < -180:
             rotation_angle += 360
+            
         
         angle_rad = math.radians(rotation_angle)
         if abs(rotation_angle) > 0.1:
@@ -134,18 +132,17 @@ class MyApp(ShowBase):
                 self.robot.setH(self.robot.getH() + rotation_step)
             return Task.cont
         
-        distance_to_target = distance_between_points(current, target)
-        if distance_to_target > 0.01:
+        distance_to_target = distance_between_points(self.position, target)
+        if distance_to_target > 0.05:
             move_step = move_speed * globalClock.getDt()
             move_step = min(move_step, distance_to_target)
             direction = (target_pos - current_pos).normalized()
-            new_pos = Vec3(current[0] + direction.x * move_step,
-                           current[1] + direction.y * move_step,
+            self.position = Vec3(self.position[0] + direction.x * move_step,
+                           self.position[1] + direction.y * move_step,
                            0)
-            self.robot.setPos(new_pos)
-            base.cam.setPos(new_pos.getX(),new_pos.getY(),20)
+            self.robot.setPos(self.position)
+            base.cam.setPos(self.position.getX(),self.position.getY(),20)
 
-            points[point_index] = [new_pos.x, new_pos.y]
             return Task.cont
         
         point_index += 1
