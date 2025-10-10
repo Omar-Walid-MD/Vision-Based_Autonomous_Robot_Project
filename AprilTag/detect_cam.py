@@ -2,6 +2,10 @@ import cv2
 import numpy as np
 import socketio
 import json
+import sys
+sys.path.append('/usr/lib/python3/dist-packages')
+from picamera2 import Picamera2
+import cv2.aruco as aruco
 
 
 # === Load camera calibration ===
@@ -10,16 +14,24 @@ camera_matrix = data["camera_matrix"]
 dist_coeffs = data["dist_coeffs"]
 
 # === AprilTag detection setup ===
-aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
-parameters = cv2.aruco.DetectorParameters()
+dictionary = aruco.getPredefinedDictionary(aruco.DICT_APRILTAG_36h11)
+parameters = aruco.DetectorParameters_create()
 
-detector = cv2.aruco.ArucoDetector(aruco_dict, parameters)
 
 # === Define tag size (in meters) ===
 tag_size = 0.095
 
 # === Open webcam ===
-cap = cv2.VideoCapture(0)
+picam2 = Picamera2()
+WIDTH = 640
+HEIGHT = 480
+config = picam2.create_video_configuration(
+    main={"size": (WIDTH, HEIGHT), "format": "YUV420"}, 
+    controls={"FrameDurationLimits": (16666, 16666)}  # ~60 FPS
+)
+picam2.configure(config)
+picam2.set_controls({"ExposureTime": 15000, "AnalogueGain": 8.0})
+picam2.start()
 
 def draw_pose_info(img, rvec, tvec, tag_id, corner):
     cv2.drawFrameAxes(img, camera_matrix, dist_coeffs, rvec, tvec, 0.05)
@@ -47,13 +59,12 @@ def draw_pose_info(img, rvec, tvec, tag_id, corner):
                 cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 0, 0), 2)
 
 while True:
-    ret, frame = cap.read()
-    if not ret:
+    frame = picam2.capture_array()
+    if frame is None:   # check if capture failed
         break
+    gray = frame[:HEIGHT, :WIDTH]
 
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-    corners, ids, _ = detector.detectMarkers(gray)
+    corners, ids, rejected = aruco.detectMarkers(frame, dictionary, parameters=parameters)
 
     if ids is not None:
         for corner, tag_id in zip(corners, ids.flatten()):
@@ -71,5 +82,5 @@ while True:
     if cv2.waitKey(1) == 27:  # ESC
         break
 
-cap.release()
+picam2.stop()
 cv2.destroyAllWindows()
