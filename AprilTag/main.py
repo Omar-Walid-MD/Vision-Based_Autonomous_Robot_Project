@@ -1,6 +1,8 @@
 from AprilTagCam import AprilTagCam
 import os
 import sys
+import signal
+import atexit
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -9,10 +11,28 @@ from Server.Node import Node
 
 
 if __name__ == "__main__":
+    
     node = Node("camera")
     cam = AprilTagCam()
+    
+    def cleanup():
+        print("Running cleanup...")
+        cam.close()
+    
+    def handle_sigterm(signum, frame):
+        sys.exit(0)
+    
+    atexit.register(cleanup)
+    
+    # Handle Ctrl+C and termination
+    signal.signal(signal.SIGINT, handle_sigterm)
+    signal.signal(signal.SIGTERM, handle_sigterm)
+    signal.signal(signal.SIGHUP, handle_sigterm)
+
+   
     while True:
         result = cam.detect()
         if result:
+            print("Found Tag")
             node.send("april_tag_data",result)
         

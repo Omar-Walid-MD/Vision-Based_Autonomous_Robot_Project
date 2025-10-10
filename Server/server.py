@@ -6,6 +6,7 @@ import os
 import subprocess
 from colorama import Fore, Back, Style
 import json
+import signal
 from dotenv import load_dotenv
 
 env = os.environ.copy()
@@ -29,6 +30,16 @@ async def cors_middleware(request, handler):
 sio = socketio.AsyncServer(cors_allowed_origins="*")
 app = web.Application(middlewares=[cors_middleware])
 sio.attach(app)
+
+def handle_exit(signum, frame):
+    """Handle termination signals."""
+    print("\nReceived exit signal, shutting down...")
+    sys.exit(0)
+
+# Register signal handlers
+signal.signal(signal.SIGINT, handle_exit)   # Ctrl+C
+signal.signal(signal.SIGTERM, handle_exit)  # kill command
+signal.signal(signal.SIGHUP, handle_exit)   # Close window
 
 
 def handle_get(request):
