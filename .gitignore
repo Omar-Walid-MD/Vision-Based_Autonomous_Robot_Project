@@ -1,6 +1,7 @@
 # Ignore virtual environments
 venv/
 .env/
+.env
 
 # Ignore build artifacts
 build/
@@ -15,3 +16,5 @@ __pycache__/
 # Ignore Camera Callibration
 *.npz
 calib_images/
+
+start.json

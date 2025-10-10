@@ -6,7 +6,9 @@ import os
 import subprocess
 from colorama import Fore, Back, Style
 import json
+from dotenv import load_dotenv
 
+env = os.environ.copy()
 
 # ENABLE CORS
 @web.middleware
@@ -34,11 +36,13 @@ def handle_get(request):
     
 app.router.add_get("/",handle_get)
 
-# STATES
-# with open ("./nodes.json","r") as file:
-#     nodes = json.load(file)["nodes"]
+nodes = ["simulation","camera","controller-serial"]
+node_paths = {
+    "simulation": "./Simulation/main.py",
+    "camera": "./AprilTag/main.py",
+    "controller-serial": "./ControllerSerial/main.py"
+}
 
-nodes = ["simulation","camera","distance","wheels","remote_client"]
 nodes_status = {}
 logs = []
 
@@ -51,8 +55,9 @@ async def connect(sid, environ):
 @sio.event
 async def disconnect(sid):
     node = get_node(sid)
-    del nodes_status[node]  
-    print_log(f"Module '{node}' disconnected ({sid})")
+    if node is not None:
+        del nodes_status[node]  
+        print_log(f"Module '{node}' disconnected ({sid})")
 
 @sio.event
 async def connect_node(sid, node):
@@ -63,21 +68,12 @@ async def connect_node(sid, node):
 async def join_topic(sid, topic):
     await sio.enter_room(sid=sid,room=topic)
     print_log(f"({sid}) Subscribed to topic: {topic}")
-    
 
 @sio.event
 async def send_data(sid, data):
     topic, payload = data
     print_log(f"sending to room {topic}")
     await sio.emit("get_data",[topic,payload],to=topic)
-
-    
-    
-    # target_sid = nodes_status.get(data[0],None)
-    # if target_sid is not None:
-    #     sender_node = get_node(sid)
-    #     print_log(sender_node+" "+target_sid)
-
 
 # FUNCTIONS
 
@@ -90,7 +86,7 @@ def get_node(sid):
 def start_nodes():
     # print_log("Starting Nodes...")
     # for node in nodes:
-    #     subprocess.Popen(["start","cmd","/k",f"python ./{node}.py"],shell=True)
+    #     subprocess.Popen(["start","cmd","/k",f"python ./{node}.py"],shell=True,env=env)
     print_status()
         
         

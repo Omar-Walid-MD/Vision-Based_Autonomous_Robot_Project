@@ -9,6 +9,7 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))) # add parent folder to paths
 from pathfinding import aStarSearch
+from Server.Node import Node
 
 this_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -20,6 +21,8 @@ model-cache-dir
 """
 
 loadPrcFileData("",confVars)
+
+node = Node("simulation")
 
 points = []
 point_index = 0
@@ -45,6 +48,7 @@ def distance_between_points(current, target):
     dx = target[0] - current[0]
     dy = target[1] - current[1]
     return math.sqrt(dx**2 + dy**2)
+
 
 class MyApp(ShowBase):
     def __init__(self):
@@ -91,16 +95,20 @@ class MyApp(ShowBase):
         points = [[p[0]*self.cellSize+robot_size,-p[1]*self.cellSize-robot_size] for p in points]
         self.addPointMarkers()
         
-        self.tags = []
+        self.tags = {}
         with open(os.path.join(this_directory,"./tags.json"),"r") as tags:
             tagsList = json.load(tags)["tags"]
-            self.tags = [Tag(self,tag["id"],tag["pos"],tag["angle"]) for tag in tagsList]
+            for tag in tagsList:
+                print(tag["id"])
+                self.tags[tag["id"]] = Tag(self,tag["id"],tag["pos"],tag["angle"])
         
         self.taskMgr.add(self.update,"update")
         
         self.position = (points[0][0],points[0][1],0)
         self.robot.setPos(self.position)
         base.cam.setPos(self.position[0],self.position[1],20)
+        
+        self.tags[0].locate([0,1,0])
 
     
     def update(self, task):
@@ -160,6 +168,13 @@ class MyApp(ShowBase):
                 box.setColor((1,0,0,1))
             else:
                 box.setColor((0,0,1,1))  
+                
+    def process_april_tag(self,data):
+        print(data)
 
+
+# def get_april_tag_data(data):
+#     app.process_april_tag(data)
+# node.subscribe("april_tag_data",get_april_tag_data)
 app = MyApp()
 app.run()

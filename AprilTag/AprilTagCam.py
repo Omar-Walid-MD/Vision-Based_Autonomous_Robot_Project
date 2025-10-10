@@ -1,38 +1,83 @@
 import json
 import cv2
 import numpy as np
+import os
+
+this_directory = os.path.dirname(os.path.abspath(__file__))
 
 class AprilTagCam:
     
     def __init__(self,show=False):
-        data = np.load("camera_calib.npz")
+        
+        self.platform = os.getenv("PLATFORM")
+        
+        data = np.load(os.path.join(this_directory,"./camera_calib.npz"))
         self.camera_matrix = data["camera_matrix"]
         self.dist_coeffs = data["dist_coeffs"]
         
-        self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
-        self.parameters = cv2.aruco.DetectorParameters()
-
-        self.detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.parameters)
-
         self.tag_size = 0.095
+        self.width = 640
+        self.height = 480
+        
+        
 
-        # === Open webcam ===
-        self.cap = cv2.VideoCapture(0)
+        self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
+        
+        if self.platform == "RPI":
+            from picamera2 import Picamera2
+            picam2 = Picamera2()
+            
+            self.parameters = cv2.aruco.DetectorParameters_create()
+            self.detector = cv2.aruco
+            
+            config = picam2.create_video_configuration(
+                main={"size": (self.width, self.height), "format": "YUV420"}, 
+                controls={"FrameDurationLimits": (16666, 16666)}  # ~60 FPS
+            )
+            picam2.configure(config)
+            picam2.set_controls({"ExposureTime": 15000, "AnalogueGain": 8.0})
+            picam2.start()
+            self.cap = picam2
+        else:
+            self.parameters = cv2.aruco.DetectorParameters()
+
+            self.detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.parameters)
+        
+            self.cap = cv2.VideoCapture(0)
         
         self.show = show
 
         
     
     def detect(self):
-        ret, frame = self.cap.read()
-        if not ret:
-            return False
+        
+        frame = None
+        gray = None
+        
+        if self.platform == "RPI":
+            frame = self.cap.capture_array()
+            if frame is None:   # check if capture failed
+                return
+            gray = frame[self.height, self.width]
+
+        else:
+            ret, frame = self.cap.read()
+            if not ret:
+                return False
+            
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
 
         if self.show:
             cv2.imshow("April Tag Detection",frame)
 
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        corners, ids, _ = self.detector.detectMarkers(gray)    
+        corners = None
+        ids = None
+        
+        if self.platform == "RPI":
+            corners, ids, _ = self.detector.detectMarkers(frame, self.dictionary, parameters=self.parameters)
+        else:
+            corners, ids, _ = self.detector.detectMarkers(gray)    
                 
         if ids is not None:
             for corner, tag_id in zip(corners, ids.flatten()):
