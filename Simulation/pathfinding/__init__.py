@@ -1,8 +1,10 @@
 import os
-import sys
-import platform
+from dotenv import load_dotenv
+load_dotenv()
 
-system = platform.system()
-if system == "Windows":
-    os.add_dll_directory(r"D:\msys2\mingw64\bin")
-from .pathfinding import aStarSearch
+platform = os.getenv("PLATFORM")
+if platform == "RPI":
+    from .pathfinding import aStarSearch
+else:
+    from .pythonPathfinding import a_star_search as aStarSearch
+

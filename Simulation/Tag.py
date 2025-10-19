@@ -7,17 +7,18 @@ class Tag:
         
         self.id = id
         
-        size = 0.5
+        size = 0.12
         cm = CardMaker("quad")
         cm.setFrame(-size, size, -size, size)   # (left, right, bottom, top)
         self.quad = scene.render.attachNewNode(cm.generate())
 
         # --- Position and rotation ---
         dir = [math.sin(math.radians(180-angle))*0.499,math.cos(math.radians(180-angle))*0.499]
-        pos[0] = (pos[0] - dir[0]) * scene.cellSize
-        pos[1] = (-pos[1] - dir[1]) * scene.cellSize
+        pos[0] = (pos[0] - dir[0])
+        pos[1] = (-pos[1] - dir[1])
         self.quad.setPos(pos[0],pos[1],1) 
         self.quad.setHpr(angle, 0, 0)
+        self.angle = angle
 
         # --- Load texture ---
         tex = scene.loader.loadTexture(f"textures/Tag {self.id}.png")
@@ -29,8 +30,21 @@ class Tag:
         self.pointer.reparentTo(self.quad)
         self.pointer.setLightOff()
         self.pointer.setColor((1,0,1,1))
+        self.pointer.setTextureOff(1)
         
-    def locate(self,offset):
-        self.pointer.setPos(offset[0],offset[1],offset[2])
+    
+
+
+        
+    def locate(self,offset,rotation):
+        angle = rotation[1]
+        rad_angle = math.radians(angle)
+        
+        pos = [0,0]
+        pos[0] = offset[0]*math.cos(rad_angle) - offset[2]*math.sin(rad_angle)
+        pos[1] = offset[0]*math.sin(rad_angle) + offset[2]*math.cos(rad_angle)
+
+        self.pointer.setPos(pos[0],-pos[1],offset[1])
+        self.pointer.setHpr(angle,0,0)
         pass
         

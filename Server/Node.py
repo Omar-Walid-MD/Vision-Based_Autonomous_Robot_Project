@@ -6,11 +6,13 @@ class Node:
 
         self.node_name = node_name
         self.topics = {}
+        self.connected = False
         
         @self.sio.event
         def connect():
             print(f"Node {node_name} connected")
             self.sio.emit("connect_node", node_name)
+            self.connected = True
 
         @self.sio.event
         def get_data(data):
@@ -29,7 +31,8 @@ class Node:
         tryconnect()
         
     def send(self,topic,data):
-        self.sio.emit("send_data",[topic,data])
+        if self.connected:
+            self.sio.emit("send_data",[topic,data])
     
     def subscribe(self,topic,function):
         self.sio.emit("join_topic", topic)

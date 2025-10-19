@@ -22,7 +22,6 @@ model-cache-dir
 
 loadPrcFileData("",confVars)
 
-node = Node("simulation")
 
 points = []
 point_index = 0
@@ -91,9 +90,9 @@ class MyApp(ShowBase):
         start = [1,1]
         end = [30,30]
         
-        points = aStarSearch(self.grid,start,end)
-        points = [[p[0]*self.cellSize+robot_size,-p[1]*self.cellSize-robot_size] for p in points]
-        self.addPointMarkers()
+        # points = aStarSearch(self.grid,start,end)
+        # points = [[p[0]*self.cellSize+robot_size,-p[1]*self.cellSize-robot_size] for p in points]
+        # self.addPointMarkers()
         
         self.tags = {}
         with open(os.path.join(this_directory,"./tags.json"),"r") as tags:
@@ -104,18 +103,17 @@ class MyApp(ShowBase):
         
         self.taskMgr.add(self.update,"update")
         
-        self.position = (points[0][0],points[0][1],0)
+        # self.position = (points[0][0],points[0][1],0)
+        self.position = (2,-2,0)
         self.robot.setPos(self.position)
         base.cam.setPos(self.position[0],self.position[1],20)
         
-        self.tags[0].locate([0,1,0])
-
     
     def update(self, task):
         global point_index
         if point_index >= len(points) - 1:
             return Task.done
-            
+                    
         current = points[point_index]
         target = points[point_index + 1]
         current_pos = Vec3(current[0], current[1], 0)
@@ -170,11 +168,16 @@ class MyApp(ShowBase):
                 box.setColor((0,0,1,1))  
                 
     def process_april_tag(self,data):
-        print(data)
+        if self.tags.get(data["id"],None) is not None:
+            self.tags[data["id"]].locate(data["position"],data["rotation"])
+        else:
+            print("Tag not found in map")
 
 
-# def get_april_tag_data(data):
-#     app.process_april_tag(data)
-# node.subscribe("april_tag_data",get_april_tag_data)
+def get_april_tag_data(data):
+    app.process_april_tag(data)
+    
+node = Node("simulation")
+node.subscribe("april_tag_data",get_april_tag_data)
 app = MyApp()
 app.run()

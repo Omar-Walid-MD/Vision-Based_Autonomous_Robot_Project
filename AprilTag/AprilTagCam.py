@@ -1,7 +1,7 @@
-import json
 import cv2
 import numpy as np
 import os
+import time
 
 this_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -19,8 +19,6 @@ class AprilTagCam:
         self.width = 640
         self.height = 480
         
-        
-
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
         
         if self.platform == "RPI":
@@ -104,7 +102,8 @@ class AprilTagCam:
                 
 
                 tag_data = {
-                    "tag_id": int(tag_id),
+                    "time": time.time_ns() // 1_000_000,
+                    "id": int(tag_id),
                     "position": [
                         float(tvec[0][0]),
                         float(tvec[0][1]),

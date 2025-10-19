@@ -4,7 +4,7 @@ import socketio
 import json
 import sys
 sys.path.append('/usr/lib/python3/dist-packages')
-from picamera2 import Picamera2
+# from picamera2 import Picamera2
 import cv2.aruco as aruco
 
 
