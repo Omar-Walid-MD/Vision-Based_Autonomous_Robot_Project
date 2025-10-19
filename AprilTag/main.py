@@ -1,6 +1,8 @@
 from AprilTagCam import AprilTagCam
 import os
 import sys
+import signal
+import atexit
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -8,11 +10,28 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))) 
 from Server.Node import Node
 
 if __name__ == "__main__":
+    
     node = Node("camera")
     cam = AprilTagCam()
+    
+    def cleanup():
+        print("Running cleanup...")
+        cam.close()
+    
+    def handle_sigterm(signum, frame):
+        sys.exit(0)
+    
+    atexit.register(cleanup)
+    
+    # Handle Ctrl+C and termination
+    signal.signal(signal.SIGINT, handle_sigterm)
+    signal.signal(signal.SIGTERM, handle_sigterm)
+    signal.signal(signal.SIGHUP, handle_sigterm)
+
+   
     while True:
         result = cam.detect()
         if result:
-            # print(result["rotation"])
+            print("Found Tag")
             node.send("april_tag_data",result)
         

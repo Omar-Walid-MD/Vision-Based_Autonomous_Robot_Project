@@ -56,7 +56,7 @@ class AprilTagCam:
             frame = self.cap.capture_array()
             if frame is None:   # check if capture failed
                 return
-            gray = frame[self.height, self.width]
+            gray = frame[:self.height, :self.width]
 
         else:
             ret, frame = self.cap.read()
@@ -73,7 +73,7 @@ class AprilTagCam:
         ids = None
         
         if self.platform == "RPI":
-            corners, ids, _ = self.detector.detectMarkers(frame, self.dictionary, parameters=self.parameters)
+            corners, ids, _ = self.detector.detectMarkers(frame, self.aruco_dict, parameters=self.parameters)
         else:
             corners, ids, _ = self.detector.detectMarkers(gray)    
                 
@@ -120,3 +120,9 @@ class AprilTagCam:
         else:
             return False        
                 
+
+    def close(self):
+        print("Releasing camera...")
+        self.cap.stop()
+        self.cap.close()
+        
