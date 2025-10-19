@@ -16,6 +16,6 @@ __pycache__/
 # Ignore Camera Callibration
 *.npz
 calib_images/
-vosk-en-us/
+Voice/vosk-en-us/
 
 start.json
