@@ -12,6 +12,7 @@ platform = os.getenv("PLATFORM")
 
 this_directory = os.path.dirname(os.path.abspath(__file__))
 
+
 with open(os.path.join(this_directory,"./start.json"),"r") as start:
     processes = json.load(start)["processes"]
     for process in processes:

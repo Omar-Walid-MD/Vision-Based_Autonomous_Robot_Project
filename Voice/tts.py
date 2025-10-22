@@ -1,5 +1,4 @@
-import pyttsx3
+import os
 
-engine = pyttsx3.init()
-engine.say("Hello! my name is VBAR. I am here to help you get to your destination today!")
-engine.runAndWait()
+def speak(text):
+	os.system(f'espeak-ng -v en+m7 -s 150 -p 75 "{text}"')
