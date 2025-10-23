@@ -68,6 +68,11 @@ async def send_data(sid, data):
     print_log(f"sending to room {topic}")
     await sio.emit("get_data",[topic,payload],to=topic)
 
+@sio.event
+async def shutdown(sid):
+    print_log("shutting down")
+    os.system("sudo shutdown -h now")
+
 # FUNCTIONS
 
 def get_node(sid):

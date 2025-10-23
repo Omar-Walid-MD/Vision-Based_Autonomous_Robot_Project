@@ -1,6 +1,7 @@
 import serial
 import os
 import sys
+import time
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -12,21 +13,26 @@ node = Node("controller-serial")
 platform = os.getenv("PLATFORM")
 port = os.getenv("SERIAL_PORT")
 
-ser = serial.Serial(port,115200)
-    
+ser = serial.Serial(port,115200,timeout=1)
+
 def send_moves_to_esp(data):
-    ser.write(bytes(data,"utf-8"))
-    
-node.subscribe("controller_moves",send_moves_to_esp)
+    if not data.endswith("\n"):
+        data += "\n"
+    ser.write(data.encode("utf-8"))
+    print(f"> Sent: {data.strip()}")
 
 send_moves_to_esp("ping")
 
-while True:
-    try:    
-        if ser.in_waiting:
-            data = ser.readline().decode(errors="ignore").strip()
+try:
+    while True:
+        if ser.in_waiting > 0:
+            data = ser.readline().decode("utf-8", errors="ignore").strip()
             if data:
                 print(data)
-    except Exception as e:
-        print(e)
-        break
+        time.sleep(0.05)
+        count += 1
+
+except KeyboardInterrupt:
+    print("Exiting...")
+finally:
+    ser.close()
