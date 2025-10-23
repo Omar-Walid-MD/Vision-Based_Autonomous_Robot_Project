@@ -22,7 +22,6 @@ model-cache-dir
 
 loadPrcFileData("",confVars)
 
-
 points = []
 point_index = 0
 
@@ -47,7 +46,7 @@ def distance_between_points(current, target):
     dx = target[0] - current[0]
     dy = target[1] - current[1]
     return math.sqrt(dx**2 + dy**2)
-
+    
 
 class MyApp(ShowBase):
     def __init__(self):
@@ -90,9 +89,9 @@ class MyApp(ShowBase):
         start = [1,1]
         end = [30,30]
         
-        # points = aStarSearch(self.grid,start,end)
-        # points = [[p[0]*self.cellSize+robot_size,-p[1]*self.cellSize-robot_size] for p in points]
-        # self.addPointMarkers()
+        points = aStarSearch((self.grid),start,end)
+        points = [self.grid_to_world(p) for p in points]
+        self.addPointMarkers()
         
         self.tags = {}
         with open(os.path.join(this_directory,"./tags.json"),"r") as tags:
@@ -165,19 +164,30 @@ class MyApp(ShowBase):
             elif i == len(points)-1:
                 box.setColor((1,0,0,1))
             else:
-                box.setColor((0,0,1,1))  
+                box.setColor((0,0,1,1))
+                
+    def world_to_grid(self,world_coords):
+        return [
+            (world_coords[0]-robot_size)/self.cellSize,
+            (-world_coords[1]-robot_size)/self.cellSize,
+        ]
+                
+    def grid_to_world(self,grid_coords):
+        return [grid_coords[0]*self.cellSize+robot_size,-grid_coords[1]*self.cellSize-robot_size]
+
                 
     def process_april_tag(self,data):
+        print(data)
         if self.tags.get(data["id"],None) is not None:
             self.tags[data["id"]].locate(data["position"],data["rotation"])
         else:
             print("Tag not found in map")
 
 
-def get_april_tag_data(data):
-    app.process_april_tag(data)
     
 node = Node("simulation")
-node.subscribe("april_tag_data",get_april_tag_data)
 app = MyApp()
+
+# NODE SUBSCRIPTION
+node.subscribe("april_tag_data",app.process_april_tag)
 app.run()
