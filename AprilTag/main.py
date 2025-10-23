@@ -13,6 +13,8 @@ if __name__ == "__main__":
     
     node = Node("camera")
     cam = AprilTagCam()
+    platform = os.getenv("PLATFORM")
+
     
     def cleanup():
         print("Running cleanup...")
@@ -26,7 +28,10 @@ if __name__ == "__main__":
     # Handle Ctrl+C and termination
     signal.signal(signal.SIGINT, handle_sigterm)
     signal.signal(signal.SIGTERM, handle_sigterm)
-    signal.signal(signal.SIGHUP, handle_sigterm)
+    if platform == "WINDOWS":
+        signal.signal(signal.SIGBREAK, handle_sigterm)
+    else:
+        signal.signal(signal.SIGHUP, handle_sigterm)   # Close window
 
    
     while True:

@@ -7,28 +7,16 @@ import subprocess
 from colorama import Fore, Back, Style
 import json
 import signal
+import sys
 from dotenv import load_dotenv
-
+load_dotenv()
 env = os.environ.copy()
+platform = os.getenv("PLATFORM")
 
-# ENABLE CORS
-@web.middleware
-async def cors_middleware(request, handler):
-    # Handle preflight OPTIONS request
-    if request.method == "OPTIONS":
-        resp = web.Response(status=200)
-    else:
-        resp = await handler(request)
-
-    # Add CORS headers
-    resp.headers["Access-Control-Allow-Origin"] = "*"
-    resp.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS"
-    resp.headers["Access-Control-Allow-Headers"] = "*"
-    return resp
 
 # SERVER SETUP
 sio = socketio.AsyncServer(cors_allowed_origins="*")
-app = web.Application(middlewares=[cors_middleware])
+app = web.Application()
 sio.attach(app)
 
 def handle_exit(signum, frame):
@@ -39,20 +27,14 @@ def handle_exit(signum, frame):
 # Register signal handlers
 signal.signal(signal.SIGINT, handle_exit)   # Ctrl+C
 signal.signal(signal.SIGTERM, handle_exit)  # kill command
-signal.signal(signal.SIGHUP, handle_exit)   # Close window
+
+if platform == "WINDOWS":
+    signal.signal(signal.SIGBREAK, handle_exit)
+else:
+    signal.signal(signal.SIGHUP, handle_exit)   # Close window
 
 
-def handle_get(request):
-    return web.Response(text="Welcome to the server!!")
-    
-app.router.add_get("/",handle_get)
-
-nodes = ["simulation","camera","controller-serial"]
-node_paths = {
-    "simulation": "./Simulation/main.py",
-    "camera": "./AprilTag/main.py",
-    "controller-serial": "./ControllerSerial/main.py"
-}
+nodes = ["simulation","camera","controller-serial","voice"]
 
 nodes_status = {}
 logs = []
@@ -94,10 +76,7 @@ def get_node(sid):
             return k
     return None 
 
-def start_nodes():
-    # print_log("Starting Nodes...")
-    # for node in nodes:
-    #     subprocess.Popen(["start","cmd","/k",f"python ./{node}.py"],shell=True,env=env)
+def start():
     print_status()
         
         
@@ -131,5 +110,5 @@ def clear_terminal():
         
 # NAME
 if __name__ == '__main__':
-    threading.Timer(1,start_nodes).start()
+    threading.Timer(1,start).start()
     web.run_app(app, port=5000)

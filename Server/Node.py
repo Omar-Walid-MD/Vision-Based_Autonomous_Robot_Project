@@ -33,10 +33,21 @@ class Node:
     def send(self,topic,data):
         if self.connected:
             self.sio.emit("send_data",[topic,data])
+        else:
+            print("Node not connected!")
     
     def subscribe(self,topic,function):
-        self.sio.emit("join_topic", topic)
-        self.topics[topic] = function
+        if self.connected:
+            self.sio.emit("join_topic", topic)
+            self.topics[topic] = function
+        else:
+            print("Node not connected!")
+        
+    def emit(self,event):
+        if self.connected:
+            self.sio.emit(event)
+        else:
+            print("Node not connected!")
 
         
 

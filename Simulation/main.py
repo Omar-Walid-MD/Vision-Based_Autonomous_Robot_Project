@@ -173,7 +173,10 @@ class MyApp(ShowBase):
         ]
                 
     def grid_to_world(self,grid_coords):
-        return [grid_coords[0]*self.cellSize+robot_size,-grid_coords[1]*self.cellSize-robot_size]
+        return [
+            grid_coords[0]*self.cellSize+robot_size,
+            -grid_coords[1]*self.cellSize-robot_size
+        ]
 
                 
     def process_april_tag(self,data):

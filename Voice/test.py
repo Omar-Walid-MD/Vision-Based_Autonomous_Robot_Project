@@ -1,8 +1,11 @@
 import sounddevice as sd
 import queue
 import json
+import os
 import pyttsx3
 from vosk import Model, KaldiRecognizer
+
+this_directory = os.path.dirname(os.path.abspath(__file__))
 
 # إعداد الطابور علشان الصوت
 q = queue.Queue()
@@ -11,7 +14,8 @@ def callback(indata, frames, time, status):
     q.put(bytes(indata))
 
 # تحميل الموديل (تأكد إن اسم الفولدر هو نفس الاسم عندك)
-model = Model("vosk-en-us")
+
+model = Model(os.path.join(this_directory,"vosk-en-us"))
 rec = KaldiRecognizer(model, 16000)
 
 # إعداد TTS

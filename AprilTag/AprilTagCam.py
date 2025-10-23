@@ -123,6 +123,7 @@ class AprilTagCam:
 
     def close(self):
         print("Releasing camera...")
-        self.cap.stop()
-        self.cap.close()
+        if self.platform == "RPI":
+            self.cap.stop()
+            self.cap.close()
         
