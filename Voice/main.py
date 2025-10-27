@@ -3,7 +3,7 @@ import queue
 import json
 import os
 import sys
-from tts import speak
+import pyttsx3
 from vosk import Model, KaldiRecognizer
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))) # add parent folder to paths
@@ -26,6 +26,14 @@ EXIT_WORD = "thank you"
 running = True
 print(f"🎤 Say '{TRIGGER_WORD} go to [place]' or '{TRIGGER_WORD} stop'")
 
+
+def speak(voice):
+    print(voice)
+    engine = pyttsx3.init()
+    engine.say(voice)
+    engine.runAndWait()
+
+
 def handle_command(command_word, argument):
     if command_word == "go":
         voice = f"going to {argument}"
@@ -45,7 +53,6 @@ def handle_command(command_word, argument):
         voice = f"Unknown command: {command_word}"
         speak(voice)
 
-    
 
 speak(f"Hello! my name is {TRIGGER_WORD}.")
     
@@ -64,7 +71,7 @@ with sd.RawInputStream(samplerate=16000, blocksize=4000, dtype='int16',
 
             if EXIT_WORD in text:
                 speak("Shutting down...")
-                # node.emit("shutdown")
+                node.emit("shutdown")
                 running = False
                 break
 

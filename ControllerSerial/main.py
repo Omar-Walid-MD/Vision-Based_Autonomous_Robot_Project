@@ -2,37 +2,65 @@ import serial
 import os
 import sys
 import time
+import json
 from dotenv import load_dotenv
 load_dotenv()
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))) # add parent folder to paths
 from Server.Node import Node
+from CommandChar import CommandChar
 
-node = Node("controller-serial")
 
 platform = os.getenv("PLATFORM")
 port = os.getenv("SERIAL_PORT")
 
 ser = serial.Serial(port,115200,timeout=1)
 
-def send_moves_to_esp(data):
+
+# SERIAL FUNCTIONS
+def write_to_serial(data):
     if not data.endswith("\n"):
         data += "\n"
     ser.write(data.encode("utf-8"))
     print(f"> Sent: {data.strip()}")
 
-send_moves_to_esp("ping")
+def read_from_serial():
+    return ser.readline().decode("utf-8", errors="ignore").strip()
 
-try:
-    while True:
-        if ser.in_waiting > 0:
-            data = ser.readline().decode("utf-8", errors="ignore").strip()
-            if data:
+
+# TOPIC FUNCTIONS
+def write_command_to_serial(args):
+    command = args[0]
+    print(command, CommandChar.APRIL_TAG_SEARCH)
+    
+    if command == CommandChar.APRIL_TAG_SEARCH:
+        write_to_serial(CommandChar.APRIL_TAG_SEARCH)
+        
+    elif command == CommandChar.STOP:
+        write_to_serial(CommandChar.STOP)
+        
+    elif command == CommandChar.MOVE_TO_POINTS:
+        points = json.dumps(args[1])
+        print(points)
+        write_to_serial(CommandChar.MOVE_TO_POINTS + CommandChar.SEPARATOR + points)
+
+
+if __name__ == "__main__":
+    
+    node = Node("controller-serial")
+
+    node.subscribe("write_command",write_command_to_serial)
+
+    try:
+        while True:
+            if ser.in_waiting > 0:
+                data = read_from_serial()
                 print(data)
-        time.sleep(0.05)
-        count += 1
-
-except KeyboardInterrupt:
-    print("Exiting...")
-finally:
-    ser.close()
+                if data == CommandChar.STOP_ACK:
+                    print("Received Stop Acknowledge")
+                    node.send("robot_stop_acknowledge",True)
+                    
+    except KeyboardInterrupt:
+        print("Exiting...")
+    finally:
+        ser.close()

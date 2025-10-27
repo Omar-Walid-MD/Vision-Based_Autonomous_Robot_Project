@@ -1,3 +1,4 @@
+
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import loadPrcFileData, DirectionalLight, AmbientLight, Vec3
 from direct.task import Task
@@ -19,7 +20,12 @@ window-title Robot Simulation And Mapping
 show-frame-rate-meter True
 model-cache-dir
 """
-
+location_name = {
+    "a":[1,1],
+    "b":[10,10],
+    "c": [20,20],
+    "d":[30,30]
+}
 loadPrcFileData("",confVars)
 
 points = []
@@ -86,12 +92,6 @@ class MyApp(ShowBase):
         alnp = self.render.attachNewNode(alight)
         self.render.setLight(alnp)
         
-        start = [1,1]
-        end = [30,30]
-        
-        points = aStarSearch((self.grid),start,end)
-        points = [self.grid_to_world(p) for p in points]
-        self.addPointMarkers()
         
         self.tags = {}
         with open(os.path.join(this_directory,"./tags.json"),"r") as tags:
@@ -111,7 +111,7 @@ class MyApp(ShowBase):
     def update(self, task):
         global point_index
         if point_index >= len(points) - 1:
-            return Task.done
+            return Task.cont
                     
         current = points[point_index]
         target = points[point_index + 1]
@@ -168,15 +168,12 @@ class MyApp(ShowBase):
                 
     def world_to_grid(self,world_coords):
         return [
-            (world_coords[0]-robot_size)/self.cellSize,
-            (-world_coords[1]-robot_size)/self.cellSize,
+            math.floor((world_coords[0]-robot_size)/self.cellSize),
+            math.floor((-world_coords[1]-robot_size)/self.cellSize),
         ]
                 
     def grid_to_world(self,grid_coords):
-        return [
-            grid_coords[0]*self.cellSize+robot_size,
-            -grid_coords[1]*self.cellSize-robot_size
-        ]
+        return [grid_coords[0]*self.cellSize+robot_size,-grid_coords[1]*self.cellSize-robot_size]
 
                 
     def process_april_tag(self,data):
@@ -186,11 +183,32 @@ class MyApp(ShowBase):
         else:
             print("Tag not found in map")
 
+    def process_move_to(self,name):
+        global points
+        global point_index
+        point_index = 0
+        
+        start=self.world_to_grid(self.position)
+        end=location_name[name]
+        points = aStarSearch(self.grid,start,end)
+        points = [self.grid_to_world(p) for p in points]
+        points[0] = self.position
+        self.addPointMarkers()
+        
+    def stop_process(self,data):
+        global points
+        global point_index
+        point_index = 0
+        points = []
+        
+        
 
-    
+                   
 node = Node("simulation")
 app = MyApp()
 
 # NODE SUBSCRIPTION
 node.subscribe("april_tag_data",app.process_april_tag)
+node.subscribe("move_to",app.process_move_to)
+node.subscribe("stop",app.stop_process)
 app.run()

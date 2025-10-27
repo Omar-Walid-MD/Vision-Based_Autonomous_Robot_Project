@@ -8,6 +8,7 @@ from colorama import Fore, Back, Style
 import json
 import signal
 import sys
+import time
 from dotenv import load_dotenv
 load_dotenv()
 env = os.environ.copy()
@@ -70,8 +71,11 @@ async def send_data(sid, data):
 
 @sio.event
 async def shutdown(sid):
+    await sio.emit("shutdown")
     print_log("shutting down")
-    os.system("sudo shutdown -h now")
+    if platform == "RPI":
+        time.sleep(2)
+        os.system("sudo shutdown -h now")
 
 # FUNCTIONS
 

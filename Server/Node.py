@@ -1,4 +1,5 @@
 import socketio
+import os
 
 class Node:
     def __init__(self, node_name, url="http://localhost:5000"):
@@ -20,6 +21,10 @@ class Node:
             topicFunction = self.topics.get(topic,None)
             if topicFunction is not None:
                 topicFunction(payload)
+                
+        @self.sio.event
+        def shutdown():
+            os._exit(0)
                 
             
         def tryconnect():

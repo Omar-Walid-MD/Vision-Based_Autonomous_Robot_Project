@@ -9,7 +9,6 @@ env = os.environ.copy()
 
 platform = os.getenv("PLATFORM")
 
-
 this_directory = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -23,4 +22,3 @@ with open(os.path.join(this_directory,"./start.json"),"r") as start:
                 ["lxterminal", "-e", f"bash -c '{process}; exec bash'"],
                 env=env
             )
-            
