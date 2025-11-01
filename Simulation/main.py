@@ -11,6 +11,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))) # add parent folder to paths
 from pathfinding import aStarSearch
 from Server.Node import Node
+from ControllerSerial.CommandChar import CommandChar
 
 this_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -102,10 +103,12 @@ class MyApp(ShowBase):
         
         self.taskMgr.add(self.update,"update")
         
-        # self.position = (points[0][0],points[0][1],0)
+        
         self.position = (2,-2,0)
         self.robot.setPos(self.position)
         base.cam.setPos(self.position[0],self.position[1],20)
+        
+        node.send("write_command",[CommandChar.APRIL_TAG_SEARCH])
         
     
     def update(self, task):
@@ -192,8 +195,10 @@ class MyApp(ShowBase):
         end=location_name[name]
         points = aStarSearch(self.grid,start,end)
         points = [self.grid_to_world(p) for p in points]
-        points[0] = self.position
+        points[0] = [self.position[0],self.position[1]]
         self.addPointMarkers()
+        
+        node.send("write_command",[CommandChar.MOVE_TO_POINTS,points])
         
     def stop_process(self,data):
         global points

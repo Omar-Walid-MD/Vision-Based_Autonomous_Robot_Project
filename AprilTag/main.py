@@ -26,14 +26,14 @@ def handle_sigterm(signum, frame):
     sys.exit(0)
     
 def now():
-    return int(time.time_ns()//1000)
+    return int(time.time_ns()//1_000_000)
     
-def read_april_tag():
+def read_april_tag(data):
     global robot_stopped, last_tag_date
     
     # code to read april tags. may need to read multiple times to get average reading and eliminate noise or use other logic
     result = cam.detect()
-    print("Found Tag")
+    
     node.send("april_tag_data",result)
     robot_stopped = False
     last_tag_date = now()
@@ -56,9 +56,9 @@ if __name__ == "__main__":
     while True:
         result = cam.detect()
         if result:
-            if not robot_stopped and last_tag_date - now() > 30*1000:
+            if not robot_stopped and (last_tag_date == 0 or now() - last_tag_date > 20*1000):
                 print("Tag detected for reading. stopping to read accurately...")
-                node.send("write_command",CommandChar.STOP)
+                node.send("write_command",[CommandChar.STOP])
                 robot_stopped = True
                 
         

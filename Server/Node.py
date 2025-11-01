@@ -24,6 +24,7 @@ class Node:
                 
         @self.sio.event
         def shutdown():
+            print("shutting down node")
             os._exit(0)
                 
             
