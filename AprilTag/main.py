@@ -27,7 +27,7 @@ def handle_sigterm(signum, frame):
     sys.exit(0)
     
 def now():
-    return int(time.time_ns()//1000)
+    return int(time.time_ns()//1_000_000)
     
 # def read_april_tag():
 #     global robot_stopped, last_tag_date

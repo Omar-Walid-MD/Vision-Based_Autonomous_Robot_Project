@@ -31,9 +31,9 @@ def read_from_serial():
 # TOPIC FUNCTIONS
 def write_command_to_serial(args):
     command = args[0]
-    print(command, CommandChar.APRIL_TAG_SEARCH)
     
     if command == CommandChar.APRIL_TAG_SEARCH:
+        print("send april tag search")
         write_to_serial(CommandChar.APRIL_TAG_SEARCH)
         
     elif command == CommandChar.STOP:
@@ -44,19 +44,23 @@ def write_command_to_serial(args):
         print(points)
         write_to_serial(CommandChar.MOVE_TO_POINTS + CommandChar.SEPARATOR + points)
 
+def write_stop_to_serial(args):
+    write_to_serial(CommandChar.STOP)
+    
 def handle_received_command(args):
     
     if args == CommandChar.STOP_ACK:
         print("Received Stop Acknowledge")
         node.send("robot_stop_acknowledge",True)
 
-
+    
 if __name__ == "__main__":
     
     node = Node("controller-serial")
 
     node.subscribe("write_command",write_command_to_serial)
-
+    node.subscribe("stop",write_stop_to_serial)
+    
     try:
         while True:
             if ser.in_waiting > 0:

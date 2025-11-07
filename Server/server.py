@@ -60,7 +60,7 @@ async def connect_node(sid, node):
     
 @sio.event
 async def join_topic(sid, topic):
-    await sio.enter_room(sid=sid,room=topic)
+    sio.enter_room(sid=sid,room=topic)
     print_log(f"({sid}) Subscribed to topic: {topic}")
 
 @sio.event
@@ -74,8 +74,7 @@ async def start_shutdown(sid):
     await sio.emit("shutdown")
     print_log("shutting down")
     if platform == "RPI":
-        print_log("shutting down pi")
-        time.sleep(2)
+        await asyncio.sleep(2)
         os.system("sudo shutdown -h now")
 
 # FUNCTIONS
