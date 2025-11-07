@@ -32,10 +32,6 @@ class Tag:
         self.pointer.setColor((1,0,1,1))
         self.pointer.setTextureOff(1)
         
-    
-
-
-        
     def locate(self,offset,rotation):
         angle = rotation[1]
         rad_angle = math.radians(angle)

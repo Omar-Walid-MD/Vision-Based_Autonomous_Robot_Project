@@ -15,7 +15,8 @@ node = Node("camera")
 cam = AprilTagCam()
 platform = os.getenv("PLATFORM")
 
-robot_stopped = False # robot should stop to take accurate reads from april tag
+# robot_stopped = False # robot should stop to take accurate reads from april tag
+robot_searching = False
 last_tag_date = 0
 
 def cleanup():
@@ -28,15 +29,32 @@ def handle_sigterm(signum, frame):
 def now():
     return int(time.time_ns()//1000)
     
-def read_april_tag():
-    global robot_stopped, last_tag_date
+# def read_april_tag():
+#     global robot_stopped, last_tag_date
     
-    # code to read april tags. may need to read multiple times to get average reading and eliminate noise or use other logic
+#     # code to read april tags. may need to read multiple times to get average reading and eliminate noise or use other logic
+#     result = cam.detect()
+#     print("Found Tag")
+#     node.send("april_tag_data",result)
+#     robot_stopped = False
+#     last_tag_date = now()
+
+def start_search():
+    global robot_searching
+    robot_searching = True
+    node.send("write_command",[CommandChar.APRIL_TAG_SEARCH])
+
+def on_robot_stop():
+    target_angle = 90
+    margin = 2
+    
     result = cam.detect()
-    print("Found Tag")
-    node.send("april_tag_data",result)
-    robot_stopped = False
-    last_tag_date = now()
+    angle = result["rotation"][1]
+    
+    if abs(angle - target_angle) < margin:
+        print("Tag aligning successful!")
+    else:
+        node.send("write_command",[CommandChar.ROTATE,angle-target_angle])
     
 
 if __name__ == "__main__":    
@@ -51,14 +69,18 @@ if __name__ == "__main__":
     else:
         signal.signal(signal.SIGHUP, handle_sigterm)   # Close window
 
-    node.subscribe("robot_stop_acknowledge",read_april_tag)
-   
+    # node.subscribe("robot_stop_acknowledge",read_april_tag)
+    node.subscribe("robot_stop_acknowledge",on_robot_stop)
+    node.subscribe("start_search",start_search)
+
     while True:
-        result = cam.detect()
-        if result:
-            if not robot_stopped and last_tag_date - now() > 30*1000:
-                print("Tag detected for reading. stopping to read accurately...")
-                node.send("write_command",CommandChar.STOP)
-                robot_stopped = True
+        if robot_searching:
+            result = cam.detect()
+            if result:
+                # if not robot_stopped and last_tag_date - now() > 30*1000:
+                    print("Tag detected for reading. stopping.")
+                    node.send("write_command",[CommandChar.STOP])
+                    # robot_stopped = True
+                    robot_searching = False
                 
         

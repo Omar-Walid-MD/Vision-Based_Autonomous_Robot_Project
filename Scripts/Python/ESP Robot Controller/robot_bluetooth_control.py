@@ -7,7 +7,7 @@ from bleak import BleakClient, BleakScanner, BleakError
 # -----------------------------
 # BLE Configuration
 # -----------------------------
-DEVICE_NAME = "ESP32_BLE"           # Must match ESP32 name
+DEVICE_NAME = "ESP32_ROBOT"           # Must match ESP32 name
 DEVICE_ADDRESS = "80:65:99:DF:4C:89"  # Replace with your actual MAC
 SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
 RX_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"  # Write

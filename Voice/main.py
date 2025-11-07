@@ -8,6 +8,7 @@ from vosk import Model, KaldiRecognizer
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))) # add parent folder to paths
 from Server.Node import Node
+from ControllerSerial.CommandChar import CommandChar
 
 node = Node("voice","http://192.168.1.4:5000")
 this_directory = os.path.dirname(os.path.abspath(__file__))
@@ -36,19 +37,17 @@ def speak(voice):
 
 def handle_command(command_word, argument):
     if command_word == "go":
+        node.send("move_to",argument)
         voice = f"going to {argument}"
         speak(voice)
-        node.send("voice_command",{
-            "command": "goto",
-            "arg": argument
-        })
     elif command_word == "stop":
+        node.send("stop",True)
         voice = "Stopping robot immediately"
         speak(voice)
-        node.send("voice_command",{
-            "command": "stop",
-            "arg": None
-        })
+    elif command_word == "spin":
+        node.send("write_command",[CommandChar.APRIL_TAG_SEARCH])
+        voice = "spinning right now"
+        speak(voice)
     else:
         voice = f"Unknown command: {command_word}"
         speak(voice)
@@ -71,7 +70,7 @@ with sd.RawInputStream(samplerate=16000, blocksize=4000, dtype='int16',
 
             if EXIT_WORD in text:
                 speak("Shutting down...")
-                node.emit("shutdown")
+                node.emit("start_shutdown")
                 running = False
                 break
 

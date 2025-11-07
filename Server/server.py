@@ -70,10 +70,11 @@ async def send_data(sid, data):
     await sio.emit("get_data",[topic,payload],to=topic)
 
 @sio.event
-async def shutdown(sid):
+async def start_shutdown(sid):
     await sio.emit("shutdown")
     print_log("shutting down")
     if platform == "RPI":
+        print_log("shutting down pi")
         time.sleep(2)
         os.system("sudo shutdown -h now")
 

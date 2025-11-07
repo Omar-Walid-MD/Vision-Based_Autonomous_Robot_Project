@@ -3,11 +3,14 @@ from direct.showbase.ShowBase import ShowBase
 from panda3d.core import loadPrcFileData, DirectionalLight, AmbientLight, Vec3
 from direct.task import Task
 from Tag import Tag
+from classes.Robot import Robot
+from classes.Environment import Environment
 import time
 import math
 import json
 import sys
 import os
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))) # add parent folder to paths
 from pathfinding import aStarSearch
 from Server.Node import Node
@@ -57,28 +60,21 @@ def distance_between_points(current, target):
 class MyApp(ShowBase):
     def __init__(self):
         super().__init__()
-        
-        global points
-                
+                        
         self.disableMouse()
         
+        # load grid map
         with open(os.path.join(this_directory,"./grid.json"),"r") as grid:
             data = json.load(grid)
             self.grid = data["grid"]
             self.cellSize = data["cellSize"]
             self.size = data["size"]
         
-        env = self.loader.loadModel("./models/model.obj")
-        env.reparentTo(self.render)
-        env.setPos(0,0,0)
-        env.setHpr(0,90,0)
+        # initialize environment and robot models
+        self.env = Environment(self)
+        self.robot = Robot(self)
         
-        self.robot = self.loader.loadModel("./models/robot.obj")
-        self.robot.reparentTo(self.render)
-        self.robot.setPos(2,2,0)
-        self.robot.setHpr(-90,0,0)
-        self.robot.setScale(0.75,0.75,0.75)
-        
+        # set up camera and lighting
         base.cam.setHpr(0, -90, 0)
         
         dlight = DirectionalLight("light")
@@ -92,7 +88,7 @@ class MyApp(ShowBase):
         alnp = self.render.attachNewNode(alight)
         self.render.setLight(alnp)
         
-        
+        # load april tags
         self.tags = {}
         with open(os.path.join(this_directory,"./tags.json"),"r") as tags:
             tagsList = json.load(tags)["tags"]
@@ -100,24 +96,29 @@ class MyApp(ShowBase):
                 print(tag["id"])
                 self.tags[tag["id"]] = Tag(self,tag["id"],tag["pos"],tag["angle"])
         
-        self.taskMgr.add(self.update,"update")
-        
-        # self.position = (points[0][0],points[0][1],0)
+        # set robot starting position
         self.position = (2,-2,0)
         self.robot.setPos(self.position)
         base.cam.setPos(self.position[0],self.position[1],20)
         
+        # add update task
+        self.taskMgr.add(self.update,"update")
+        
     
     def update(self, task):
         global point_index
+        
+        # if no points, continue to next iteration
         if point_index >= len(points) - 1:
             return Task.cont
-                    
+
+        # get current and target points
         current = points[point_index]
         target = points[point_index + 1]
         current_pos = Vec3(current[0], current[1], 0)
         target_pos = Vec3(target[0], target[1], 0)
         
+        # rotate to face target angle
         angle_to_target = angle_between_points(current, target)
         rotation_angle = math.degrees(angle_to_target - math.radians(self.robot.getH()))
         while rotation_angle > 180:
@@ -125,7 +126,6 @@ class MyApp(ShowBase):
         while rotation_angle < -180:
             rotation_angle += 360
             
-        
         angle_rad = math.radians(rotation_angle)
         if abs(rotation_angle) > 0.1:
             rotation_step = rotation_speed * globalClock.getDt()
@@ -137,6 +137,7 @@ class MyApp(ShowBase):
                 self.robot.setH(self.robot.getH() + rotation_step)
             return Task.cont
         
+        # move to target position
         distance_to_target = distance_between_points(self.position, target)
         if distance_to_target > 0.05:
             move_step = move_speed * globalClock.getDt()
@@ -175,7 +176,14 @@ class MyApp(ShowBase):
     def grid_to_world(self,grid_coords):
         return [grid_coords[0]*self.cellSize+robot_size,-grid_coords[1]*self.cellSize-robot_size]
 
+    def world_to_real(self,world_coords):
+        return [world_coords[0],-world_coords[1]]
+
+    def real_to_world(self,world_coords):
+        return [world_coords[0],-world_coords[1]]
                 
+                
+    # TOPIC FUNCTIONS
     def process_april_tag(self,data):
         print(data)
         if self.tags.get(data["id"],None) is not None:
@@ -201,9 +209,13 @@ class MyApp(ShowBase):
         point_index = 0
         points = []
         
+    def process_transform(self, data):
+        self.position = (data["x"], data["y"], 0)
+        self.robot.setPos(self.position)
+        self.robot.setH(data["h"])
         
-
-                   
+        
+             
 node = Node("simulation")
 app = MyApp()
 
@@ -211,4 +223,6 @@ app = MyApp()
 node.subscribe("april_tag_data",app.process_april_tag)
 node.subscribe("move_to",app.process_move_to)
 node.subscribe("stop",app.stop_process)
+node.subscribe("transform",app.process_transform)
+# START APP
 app.run()

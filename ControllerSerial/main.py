@@ -44,6 +44,12 @@ def write_command_to_serial(args):
         print(points)
         write_to_serial(CommandChar.MOVE_TO_POINTS + CommandChar.SEPARATOR + points)
 
+def handle_received_command(args):
+    
+    if args == CommandChar.STOP_ACK:
+        print("Received Stop Acknowledge")
+        node.send("robot_stop_acknowledge",True)
+
 
 if __name__ == "__main__":
     
@@ -56,9 +62,8 @@ if __name__ == "__main__":
             if ser.in_waiting > 0:
                 data = read_from_serial()
                 print(data)
-                if data == CommandChar.STOP_ACK:
-                    print("Received Stop Acknowledge")
-                    node.send("robot_stop_acknowledge",True)
+                if data[0] == "$":
+                    handle_received_command(data[1:])
                     
     except KeyboardInterrupt:
         print("Exiting...")
