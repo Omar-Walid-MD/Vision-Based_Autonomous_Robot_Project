@@ -33,7 +33,7 @@ with open(os.path.join(this_directory,"./start.json"),"r") as start:
     i = 0
     for process in processes:
         if process["start"]:
-            start_process(process["command"])
+            start_process(process["path"])
             
         if i == 0:
             time.sleep(5)
