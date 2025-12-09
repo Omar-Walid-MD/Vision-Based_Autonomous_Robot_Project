@@ -45,7 +45,7 @@ def handle_command(command_word, argument):
         voice = "Stopping robot immediately"
         speak(voice)
     elif command_word == "spin":
-        node.send("write_command",[CommandChar.APRIL_TAG_SEARCH])
+        node.send("start_search",True)
         voice = "spinning right now"
         speak(voice)
     else:

@@ -68,6 +68,7 @@ class AprilTagCam:
 
         if self.show:
             cv2.imshow("April Tag Detection",frame)
+            time.sleep(0.01)
 
         corners = None
         ids = None
