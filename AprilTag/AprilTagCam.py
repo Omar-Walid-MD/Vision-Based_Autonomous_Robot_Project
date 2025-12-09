@@ -30,7 +30,8 @@ class AprilTagCam:
             
             config = picam2.create_video_configuration(
                 main={"size": (self.width, self.height), "format": "YUV420"}, 
-                controls={"FrameDurationLimits": (16666, 16666)}  # ~60 FPS
+                controls={"FrameDurationLimits": (16666, 16666)},  # ~60 FPS
+                sensor={"output_size": (2304, 1296)}
             )
             picam2.configure(config)
             picam2.set_controls({"ExposureTime": 15000, "AnalogueGain": 8.0})

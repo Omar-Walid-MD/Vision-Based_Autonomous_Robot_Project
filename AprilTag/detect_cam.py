@@ -3,8 +3,9 @@ import numpy as np
 import socketio
 import json
 import sys
+import time
 sys.path.append('/usr/lib/python3/dist-packages')
-# from picamera2 import Picamera2
+from picamera2 import Picamera2
 import cv2.aruco as aruco
 
 
@@ -23,11 +24,12 @@ tag_size = 0.095
 
 # === Open webcam ===
 picam2 = Picamera2()
-WIDTH = 640
-HEIGHT = 480
+WIDTH = 1280
+HEIGHT = 720
 config = picam2.create_video_configuration(
     main={"size": (WIDTH, HEIGHT), "format": "YUV420"}, 
-    controls={"FrameDurationLimits": (16666, 16666)}  # ~60 FPS
+    controls={"FrameDurationLimits": (16666, 16666)},  # ~60 FPS
+    sensor={"output_size": (2304, 1296)}
 )
 picam2.configure(config)
 picam2.set_controls({"ExposureTime": 15000, "AnalogueGain": 8.0})
@@ -59,6 +61,7 @@ def draw_pose_info(img, rvec, tvec, tag_id, corner):
                 cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 0, 0), 2)
 
 while True:
+    time.sleep(0.01)
     frame = picam2.capture_array()
     if frame is None:   # check if capture failed
         break

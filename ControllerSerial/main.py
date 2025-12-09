@@ -43,10 +43,15 @@ def write_command_to_serial(args):
         points = json.dumps(args[1])
         print(points)
         write_to_serial(CommandChar.MOVE_TO_POINTS + CommandChar.SEPARATOR + points)
+    
+    elif command == CommandChar.ROTATE:
+        angle = args[1]
+        write_to_serial(CommandChar.ROTATE + CommandChar.SEPARATOR + f"{angle}")
+
 
 def write_stop_to_serial(args):
     write_to_serial(CommandChar.STOP)
-    
+    c
 def handle_received_command(args):
     
     if args == CommandChar.STOP_ACK:
