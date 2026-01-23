@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-import glob
+import time
 import os
 import sys
 sys.path.append('/usr/lib/python3/dist-packages')
@@ -28,11 +28,20 @@ imgpoints = []  # 2D points in image plane
 # === Step 1: Capture images ===
 
 picam2 = Picamera2()
-WIDTH = 640
-HEIGHT = 480
-config = picam2.create_preview_configuration({'format': 'YUV420', 'size': (WIDTH, HEIGHT)})
+sensor_mode_res = (2304,1296)  # Mode 1
+
+config = picam2.create_preview_configuration(
+    main={"size": sensor_mode_res,"format": "RGB888"},
+    raw={"size": sensor_mode_res}
+)
 picam2.configure(config)
 picam2.start()
+
+time.sleep(0.5)
+
+cv2.namedWindow("Camera", cv2.WINDOW_NORMAL)  # allow resizing
+cv2.resizeWindow("Camera", 1280, 720)         # set fixed window size
+
 
 print("[INFO] Press 's' to save an image, 'q' to quit and calibrate")
 
@@ -42,23 +51,31 @@ while True:
     frame = picam2.capture_array()
     if frame is None:   # check if capture failed
         break
-    gray = frame[:HEIGHT, :WIDTH]
+    
+    gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
 
-    found, corners = cv2.findChessboardCorners(gray, CHECKERBOARD, None)
+    
 
-    if found:
-        cv2.drawChessboardCorners(frame, CHECKERBOARD, corners, found)
-
-    cv2.imshow("Calibration", frame)
+    cv2.imshow("Camera", frame)
     key = cv2.waitKey(1)
 
-    if key == ord('s') and found:
-        img_path = os.path.join(SAVE_DIR, f"calib_{img_count}.jpg")
-        cv2.imwrite(img_path, frame)
-        print(f"[INFO] Saved {img_path}")
-        objpoints.append(objp.copy())
-        imgpoints.append(corners)
-        img_count += 1
+    if key == ord('s'):
+        print("before searching for corners")
+
+        found, corners = cv2.findChessboardCorners(gray, CHECKERBOARD, None)
+
+        print("after searching for corners")
+
+        if found:
+
+            img_path = os.path.join(SAVE_DIR, f"calib_{img_count}.jpg")
+            cv2.imwrite(img_path, frame)
+            print(f"[INFO] Saved {img_path}")
+            objpoints.append(objp.copy())
+            imgpoints.append(corners)
+            img_count += 1
+        else:
+            print("not found")
 
     elif key == ord('q'):
         break

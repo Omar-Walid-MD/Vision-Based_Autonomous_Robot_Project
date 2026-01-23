@@ -18,6 +18,8 @@ class AprilTagCam:
         self.tag_size = 0.095
         self.width = 640
         self.height = 480
+
+        self.scale_factor = 0.25
         
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
         
@@ -28,15 +30,17 @@ class AprilTagCam:
             self.parameters = cv2.aruco.DetectorParameters_create()
             self.detector = cv2.aruco
             
-            config = picam2.create_video_configuration(
-                main={"size": (self.width, self.height), "format": "YUV420"}, 
-                controls={"FrameDurationLimits": (16666, 16666)},  # ~60 FPS
-                sensor={"output_size": (2304, 1296)}
+            sensor_mode_res = (2304,1296)  # Mode 1
+
+            config = picam2.create_preview_configuration(
+                main={"size": sensor_mode_res,"format": "RGB888"},
+                raw={"size": sensor_mode_res}
             )
             picam2.configure(config)
-            picam2.set_controls({"ExposureTime": 15000, "AnalogueGain": 8.0})
             picam2.start()
             self.cap = picam2
+            time.sleep(0.5)
+
         else:
             self.parameters = cv2.aruco.DetectorParameters()
 
@@ -57,7 +61,9 @@ class AprilTagCam:
             frame = self.cap.capture_array()
             if frame is None:   # check if capture failed
                 return
-            gray = frame[:self.height, :self.width]
+            frame = cv2.resize(frame, (0,0), fx=self.scale_factor, fy=self.scale_factor)
+            gray = frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+
 
         else:
             ret, frame = self.cap.read()
@@ -76,6 +82,8 @@ class AprilTagCam:
         
         if self.platform == "RPI":
             corners, ids, _ = self.detector.detectMarkers(frame, self.aruco_dict, parameters=self.parameters)
+            corners = [corner / self.scale_factor for corner in corners]
+
         else:
             corners, ids, _ = self.detector.detectMarkers(gray)    
                 

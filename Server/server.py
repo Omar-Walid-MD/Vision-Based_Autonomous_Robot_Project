@@ -35,7 +35,7 @@ else:
     signal.signal(signal.SIGHUP, handle_exit)   # Close window
 
 
-nodes = ["simulation","camera","controller-serial","voice"]
+nodes = ["simulation","camera","controller-serial","voice","pins"]
 
 nodes_status = {}
 logs = []
