@@ -8,9 +8,8 @@ from vosk import Model, KaldiRecognizer
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))) # add parent folder to paths
 from Server.Node import Node
-from ControllerSerial.CommandChar import CommandChar
 
-node = Node("voice","http://192.168.1.4:5000")
+node = Node("voice","http://localhost:5000")
 this_directory = os.path.dirname(os.path.abspath(__file__))
 
 

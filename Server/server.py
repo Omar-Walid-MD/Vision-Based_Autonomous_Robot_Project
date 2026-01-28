@@ -60,13 +60,13 @@ async def connect_node(sid, node):
     
 @sio.event
 async def join_topic(sid, topic):
-    sio.enter_room(sid=sid,room=topic)
+    await sio.enter_room(sid=sid,room=topic)
     print_log(f"({sid}) Subscribed to topic: {topic}")
 
 @sio.event
 async def send_data(sid, data):
     topic, payload = data
-    print_log(f"sending to room {topic}")
+    print_log(f"Sending data ({payload}) to room: ({topic})")
     await sio.emit("get_data",[topic,payload],to=topic)
 
 @sio.event

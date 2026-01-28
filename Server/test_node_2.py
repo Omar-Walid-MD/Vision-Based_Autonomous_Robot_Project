@@ -1,15 +1,14 @@
 from Node import Node
+import time
 
-node = Node("camera",url="http://localhost:5000")
+node = Node("test_2",url="http://localhost:5000")
 
-def sim_request(data):
-    print(f"Received Data from Simulation:",data)
+def get_data(data):
+    print(f"Received data from a:",data)
 
-node.subscribe("simulation_request",sim_request)
+node.subscribe("send_to_b",get_data)
 
 while True:
     message = input("Enter message: ")
-    node.send("april_tag_data",message)  #example only
-
-    
-
+    node.send("send_to_a",message)
+    time.sleep(0.1)

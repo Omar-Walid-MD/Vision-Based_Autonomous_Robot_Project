@@ -2,7 +2,7 @@
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import loadPrcFileData, DirectionalLight, AmbientLight, Vec3
 from direct.task import Task
-from Tag import Tag
+from classes.Tag import Tag
 from classes.Robot import Robot
 from classes.Environment import Environment
 import time
@@ -14,7 +14,6 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))) # add parent folder to paths
 from pathfinding import aStarSearch
 from Server.Node import Node
-from ControllerSerial.CommandChar import CommandChar
 
 this_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -90,12 +89,12 @@ class MyApp(ShowBase):
         self.render.setLight(alnp)
         
         # load april tags
-        self.tags = {}
-        with open(os.path.join(this_directory,"./tags.json"),"r") as tags:
-            tagsList = json.load(tags)["tags"]
-            for tag in tagsList:
-                print(tag["id"])
-                self.tags[tag["id"]] = Tag(self,tag["id"],tag["pos"],tag["angle"])
+        # self.tags = {}
+        # with open(os.path.join(this_directory,"./tags.json"),"r") as tags:
+        #     tagsList = json.load(tags)["tags"]
+        #     for tag in tagsList:
+        #         print(tag["id"])
+        #         self.tags[tag["id"]] = Tag(self,tag["id"],tag["pos"],tag["angle"])
         
         # set robot starting position
         self.position = (2,-2,0)
@@ -197,8 +196,8 @@ class MyApp(ShowBase):
         global point_index
         point_index = 0
         
-        start=self.world_to_grid(self.position)
-        end=location_name[name]
+        start = self.world_to_grid(self.position)
+        end = location_name[name]
         points = aStarSearch(self.grid,start,end)
         points = [self.grid_to_world(p) for p in points]
         points[0] = [self.position[0],self.position[1]]
@@ -217,10 +216,11 @@ class MyApp(ShowBase):
         self.robot.setPos(self.position)
         self.robot.setH(data["h"])
         
-        
+
              
 node = Node("simulation")
 app = MyApp()
+
 
 # NODE SUBSCRIPTION
 node.subscribe("april_tag_data",app.process_april_tag)

@@ -4,7 +4,7 @@ import os
 class Node:
     def __init__(self, node_name, url="http://localhost:5000"):
         self.sio = socketio.Client()
-
+    
         self.node_name = node_name
         self.topics = {}
         self.connected = False
@@ -17,6 +17,7 @@ class Node:
 
         @self.sio.event
         def get_data(data):
+            print(data)
             topic, payload = data
             topicFunction = self.topics.get(topic,None)
             if topicFunction is not None:
@@ -38,6 +39,7 @@ class Node:
         
     def send(self,topic,data):
         if self.connected:
+            print(f"Sending data ({data}) to topic: ({topic})")
             self.sio.emit("send_data",[topic,data])
         else:
             print("Node not connected!")
