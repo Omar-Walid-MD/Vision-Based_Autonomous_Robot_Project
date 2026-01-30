@@ -1,29 +1,42 @@
-import time
 from picamera2 import Picamera2
+import cv2
+import time
 
-# Initialize camera
+# Create camera object
 picam2 = Picamera2()
 
-# Configure for video (higher FPS than preview)
-picam2.configure(
-    picam2.create_video_configuration(main={"size": (640, 480)})
+sensor_mode_res = (1536,864)
+# sensor_mode_res = (2304,1296)
+# sensor_mode_res = (4608,2592)
+
+# Output size you want to send to OpenCV (keep same aspect ratio!)
+
+config = picam2.create_preview_configuration(
+    main={"size": sensor_mode_res, "format": "RGB888"},
+    raw={"size": sensor_mode_res}  # Force the quarter-resolution sensor mode
 )
 
+picam2.configure(config)
 picam2.start()
 
-# Warm up
-time.sleep(1)
 
-print("[INFO] Measuring FPS for 5 seconds...")
-frames = 0
-t0 = time.time()
 
-while time.time() - t0 < 5:
-    frame = picam2.capture_array()
-    frames += 1
+time.sleep(0.5)  # allow camera to warm up
 
-elapsed = time.time() - t0
-fps = frames / elapsed
+cv2.namedWindow("Camera", cv2.WINDOW_NORMAL)  # allow resizing
+cv2.resizeWindow("Camera", 1280, 720)         # set fixed window size
 
-print(f"[RESULT] Captured {frames} frames in {elapsed:.2f} seconds")
-print(f"[RESULT] Approx. FPS = {fps:.2f}")
+
+while True:
+    frame = picam2.capture_array()  # Get frame as a NumPy array (RGB888)
+
+    # Convert to BGR for OpenCV
+    frame_gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+
+    cv2.imshow("Camera",frame_gray)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+picam2.stop()
+cv2.destroyAllWindows()
