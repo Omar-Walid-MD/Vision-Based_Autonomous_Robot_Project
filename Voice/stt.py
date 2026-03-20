@@ -2,8 +2,8 @@ import sounddevice as sd
 import queue
 import json
 import os
-import pyttsx3
 from vosk import Model, KaldiRecognizer
+from tts import speak
 # from Node import Node
 
 # node = Node("voice")
@@ -21,35 +21,31 @@ TRIGGER_WORD = "vector"
 TRIGGER_WORD_LIST = ["vector","victor","viktor","vicktor","victa","vitker"]   
 EXIT_WORD = "thank you"   
 running = True
-print(f"🎤 Say '{TRIGGER_WORD} go to [place]' or '{TRIGGER_WORD} stop'")
+print(f"Say '{TRIGGER_WORD} go to [place]' or '{TRIGGER_WORD} stop'")
 
 def handle_command(command_word, argument):
     if command_word == "go":
         voice = f"going to {argument}"
-        tts(voice)
+        speak(voice)
         # node.send("voice_command",{
         #     "command": "goto",
         #     "arg": argument
         # })
     elif command_word == "stop":
         voice = "Stopping robot immediately"
-        tts(voice)
+        speak(voice)
         # node.send("voice_command",{
         #     "command": "stop",
         #     "arg": None
         # })
     else:
         voice = f"Unknown command: {command_word}"
-        tts(voice)
+        speak(voice)
 
     
-def tts(voice):
-    print(voice)
-    engine = pyttsx3.init()
-    engine.say(voice)
-    engine.runAndWait()
 
-tts(f"Hello! my name is {TRIGGER_WORD}. I am here to help you get to your destination today!")
+
+speak(f"Hello! my name is {TRIGGER_WORD}. I am here to help you get to your destination today!")
     
     
 with sd.RawInputStream(samplerate=16000, blocksize=8000, dtype='int16',
@@ -66,7 +62,7 @@ with sd.RawInputStream(samplerate=16000, blocksize=8000, dtype='int16',
 
             if EXIT_WORD in text:
                 voice = "Shutting down..."
-                tts(voice)
+                speak(voice)
                 running = False
                 break
 
@@ -78,8 +74,8 @@ with sd.RawInputStream(samplerate=16000, blocksize=8000, dtype='int16',
                     argument = " ".join(words[2:] if len(words) > 2 else [])
                     handle_command(command_word, argument)
                 else:
-                    tts("Yes, sir?")
+                    speak("Yes, sir?")
             # elif len(words) >= 2 and words[0] == TRIGGER_WORD and words[1] == "stop":
             #     stop_command()
             elif TRIGGER_WORD in text:
-                tts(f"Incomplete command. Say: {TRIGGER_WORD} [command] [argument]")
+                speak(f"Incomplete command. Say: {TRIGGER_WORD} [command] [argument]")
