@@ -1,0 +1,73 @@
+Robot Lifecycle when powered on:
+
+start System
+if not localized:
+    rotate head around
+    if found tag:
+        localized
+    pivot and move around
+
+if idle:
+    wait to hear trigger word
+    if heard trigger word:
+        confirm and wait for task command
+    if heard task command:
+        decode task and confirm
+    
+    start task
+    case DELIVERY:
+        get path to target
+        start navigation
+        once reached target:
+            confirm arrival
+            wait for person to reply and receive item
+            end task
+
+    case FETCH:
+        get path to target
+        start navigation
+        once reached target:
+            confirm arrival and ask for item
+            wait for reply
+            once received reply:
+                get path to start
+                start navigation
+                once reached start:
+                    confirm arrival
+                    wait for person to reply and receive item
+                    end task
+
+    case PATIENT_CHECKUP:
+        for each patient room:
+            get path to next room
+            start navigation
+            once reached:
+                navigate inside room and find patients
+                for each patient:
+                    move to patient
+                    confirm start of checkup
+                    ask patient to face the camera
+                    move arm to head and read temperature
+                    confirm temperature reading
+                    ask patient to raise hand
+                    move arm to hand and get pulse and oxygen readings
+                    confirm end of checkup
+        
+        once done all rooms:
+            end task
+
+    if battery is below threshold:
+        if task is running:
+            finish task first
+
+        get path to charging station
+        start navigation
+
+        once reached:
+            start recharging
+        
+if recharging:
+    monitor battery level
+    if recharging is completed:
+        disconnect from charger
+        become idle

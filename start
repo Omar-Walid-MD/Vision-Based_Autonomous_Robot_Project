@@ -1,0 +1,39 @@
+#!/bin/bash
+
+SESSION_NAME="MyProject"
+num=0
+
+# Start TMUX session for project processes (for Linux and Raspberry Pi)
+# 1. Reset Session
+tmux kill-session -t "$SESSION_NAME" 2>/dev/null
+tmux new-session -d -s "$SESSION_NAME" -n "server"
+
+# 2. Use Process Substitution to feed the loop
+# This prevents the subshell problem and forces line-by-line reading
+while read -r row; do
+    # Skip empty lines
+    [ -z "$row" ] && continue
+
+    _jq() {
+        echo "${row}" | base64 -d | jq -r "${1}"
+    }
+
+    name=$(_jq '.name')
+    command=$(_jq '.command')
+
+    # 4. Create window and send keys
+    tmux new-window -t "$SESSION_NAME:$num" -n "$name"
+    tmux send-keys -t "$SESSION_NAME:$num.0" "source .venv/bin/activate && $command; bash" C-m
+
+    echo "Successfully launched window $num: $name"
+    
+    # 5. Manual Increment
+    num=$((num + 1))
+
+# The magic fix: Use -c to force each object onto a NEW line
+done < <(jq -r '.processes[1:] | .[] | @base64' start.json)
+
+# 6. Attach
+tmux select-window -t "$SESSION_NAME:0"
+tmux attach-session -t "$SESSION_NAME"
+ 

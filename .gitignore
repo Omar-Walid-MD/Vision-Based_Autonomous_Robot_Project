@@ -15,6 +15,7 @@ __pycache__/
 
 # Ignore Camera Callibration
 *.npz
+*.yaml
 calib_images/
 vosk-en-us/
 
