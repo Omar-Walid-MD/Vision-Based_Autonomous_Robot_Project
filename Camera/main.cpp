@@ -8,6 +8,9 @@
 #include <signal.h>
 
 //~ #include "Node.h"
+#include <nlohmann/json.hpp>
+
+#include "Node.h"
 
 extern "C" {
 #include <apriltag/apriltag.h>
@@ -27,6 +30,18 @@ using namespace std;
     
 // compilation command with node
 // g++ main.cpp Node.cpp -o main \
+    `pkg-config --cflags --libs opencv4 gstreamer-1.0 gstreamer-app-1.0` \
+    -I/usr/local/include \
+    -L/usr/local/lib -lsioclient \
+    -lboost_system -lboost_thread -lssl -lcrypto \
+    -lapriltag -lpthread \
+    -std=c++17 -Wall
+    
+// compilation command:
+// g++ apriltag.cpp -o apriltag `pkg-config --cflags --libs opencv4 gstreamer-1.0 gstreamer-app-1.0` -lapriltag -lpthread -std=c++17 -Wall
+    
+    
+// g++ apriltag.cpp Node.cpp -o apriltag \
     `pkg-config --cflags --libs opencv4 gstreamer-1.0 gstreamer-app-1.0` \
     -I/usr/local/include \
     -L/usr/local/lib -lsioclient \
@@ -182,6 +197,22 @@ int main(int argc, char* argv[]) {
 
     if (!appsrc) {
         std::cerr << "Could not find python_src\n";
+    std::string pipeline = "libcamerasrc ! "
+       "video/x-raw,width=2304,height=1296,framerate=50/1 ! "
+       "v4l2convert ! "
+       "video/x-raw,format=YV12 ! "
+       "appsink";
+                           
+
+
+    std::cout << "Opening pipeline...\n";
+
+    cv::VideoCapture cap(pipeline, cv::CAP_GSTREAMER);
+
+    std::cout << "After constructor\n";
+
+    if (!cap.isOpened()) {
+        std::cerr << "Cannot open camera\n";
         return -1;
     }
 
@@ -205,6 +236,8 @@ int main(int argc, char* argv[]) {
     //~ }
 
     //~ std::cout << "Opened successfully\n";
+
+    std::cout << "Opened successfully\n";
 
     apriltag_family_t *tf = tag36h11_create();
     apriltag_detector_t *td = apriltag_detector_create();
@@ -231,6 +264,7 @@ int main(int argc, char* argv[]) {
     double tag_size = 0.095; // meters
 
     //~ SocketNode my_node("camera");
+    SocketNode my_node("camera");
     
     if(show)
     {
@@ -352,6 +386,17 @@ int main(int argc, char* argv[]) {
             //~ };
             
             //~ my_node.send("apriltag_detected", j.dump());
+            
+            // Build JSON object
+            nlohmann::json j;
+            
+            j["id"] = det->id;
+            j["pose"] = {
+                {"position", {t.at<double>(0), t.at<double>(1), t.at<double>(2)}},
+                {"rotation", {roll, pitch, yaw}}
+            };
+            
+            my_node.send("apriltag_detected", j.dump());
 
             if (show)
             {
