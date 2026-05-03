@@ -7,35 +7,113 @@ if not localized:
         localized
     pivot and move around
 
-if idle:
-    wait to hear trigger word
+
+if TASK_SELECTION:
+
+    if queue not empty:
+        pop task out of queue
+        start task
+        speak "starting task (task type and arguments)"
+
+    if empty:
+        become IDLE
+
+if IDLE (task queue empty):
+
+    listen for trigger word
     if heard trigger word:
-        confirm and wait for task command
-    if heard task command:
-        decode task and confirm
+        speak "Yes, how can I help?"
+        wait for command (1 minute timeout)
+
+        if heard task command:
+            decode and validate task
+            if not valid (unknown command):
+                speak "unknown command. please repeat"
+                reset timeout
+                wait for command
+            
+            else:
+                confirm command by speaking (for example: "deliver ITEM_NAME to LOCATION_NAME?")
+
+                if heard "yes":
+                    insert task to queue front
+                    go to TASK_SELECTION
+
+                if heard "no":
+                    speak "please repeat your command"
+                    reset timeout
+                    wait for command
+        
+        if heard "cancel":
+            speak "command canceled"
+            return to idle
     
-    start task
+        if timeout:
+            speak "command timeout"
+            return to idle
+    
+
+if TASK_RUNNING:
     case DELIVERY:
+
         get path to target
-        start navigation
-        once reached target:
-            confirm arrival
-            wait for person to reply and receive item
-            end task
+
+        if not found path:
+            speak "path not found. task failed"
+            return to idle
+
+        if found path:
+            speak "path found. starting navigation"
+            start navigation (Following path and avoiding obstacles handled by navigation node)
+
+            if failed to avoid obstacle (path is blocked):
+                speak "path blocked. aborting mission"
+                return to idle
+
+            if reached target:
+                speak "ITEM_NAME delivery. receive item and say go"
+
+                wait for "go" (timeout 1 minute)
+
+                if heard "go":
+                    speak "delivery was successful"
+                    end task
+
+                if timeout:
+                    speak "time out"
+                    end task
 
     case FETCH:
+
         get path to target
-        start navigation
-        once reached target:
-            confirm arrival and ask for item
-            wait for reply
-            once received reply:
-                get path to start
-                start navigation
-                once reached start:
-                    confirm arrival
-                    wait for person to reply and receive item
-                    end task
+            
+            if not found path:
+                speak "path not found. task failed"
+                return to idle
+
+            if found path:
+                speak "path found. starting navigation"
+                start navigation (Following path and avoiding obstacles handled by navigation node)
+
+                if failed to avoid obstacle (path is blocked):
+                    speak "path blocked. aborting mission"
+                    return to idle
+
+                if reached target:
+                    speak "please fetch ITEM_NAME. place item and say go"
+
+                    wait for "go" (timeout 1 minute)
+
+                    if heard "go":
+                        speak "starting delivery"
+
+                        (SAME STEPS AS DELIVERY TASK HERE)
+
+                    if timeout:
+                        speak "time out"
+                        end task
+                        return to TASK_SELECTION
+
 
     case PATIENT_CHECKUP:
         for each patient room:
@@ -70,4 +148,4 @@ if recharging:
     monitor battery level
     if recharging is completed:
         disconnect from charger
-        become idle
+        become IDLE

@@ -12,6 +12,7 @@ dist/
 # Ignore Python cache
 __pycache__/
 *.pyc
+*.so
 
 # Ignore Camera Callibration
 *.npz

@@ -11,6 +11,7 @@ import math
 import json
 import sys
 import os
+from pathfinding import marginizeGrid
 
 this_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -24,6 +25,7 @@ loadPrcFileData("",confVars)
 
 
 mapDir = "./map"
+robotSize = 0.475
 
 class Simulation(ShowBase):
     def __init__(self,args,node):
@@ -38,9 +40,10 @@ class Simulation(ShowBase):
         # load grid map
         with open(os.path.join(this_directory,mapDir,"./map.json"),"r") as map:
             data = json.load(map)["robot_data"]
-            self.grid = data["grid"]
             self.cellSize = data["cell_size"]
             self.tags = data["tags"]
+            
+            self.grid =  marginizeGrid(data["grid"],self.cellSize,robotSize)
             
             # convert zone list into dict
             self.zones = {}
@@ -49,7 +52,7 @@ class Simulation(ShowBase):
         
         # initialize environment and robot models
         self.env = Environment(self,mapDir)
-        self.robot = Robot(self)
+        self.robot = Robot(self,robotSize)
         
         if self.show:
             self.gridVisualizer = GridVisualizer(self)
@@ -65,7 +68,8 @@ class Simulation(ShowBase):
             self.robot.setPos(pos[0],pos[1],robot_position.getZ())
         
         robot_position = self.robot.getPos()
-
+        
+        # self.robot.setPos(15.25, -5.75,robot_position.getZ())
 
         self.robot.navigate_to_location("D")
         
@@ -106,14 +110,14 @@ class Simulation(ShowBase):
 
     def world_to_grid(self,world_coords):
         return [
-            math.floor((world_coords[0]-self.robot.size)/self.cellSize),
-            math.floor((world_coords[1]-self.robot.size)/self.cellSize),
+            math.floor((world_coords[0] - self.cellSize/2)/self.cellSize),
+            math.floor((world_coords[1] - self.cellSize/2)/self.cellSize),
         ]
                 
     def grid_to_world(self,grid_coords):
         return [
-            grid_coords[0]*self.cellSize+self.robot.size,
-            grid_coords[1]*self.cellSize+self.robot.size
+            grid_coords[0]*self.cellSize + self.cellSize/2,
+            grid_coords[1]*self.cellSize + self.cellSize/2
         ]
         # return [grid_coords[0]*self.cellSize+self.cellSize/2+self.robot.size/4,grid_coords[1]*self.cellSize+self.cellSize/2+self.robot.size/4]
 
