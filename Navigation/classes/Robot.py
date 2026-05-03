@@ -36,7 +36,6 @@ class Robot(NodePath):
         
         self.setPos(2,2,0)
         self.setHpr(-90,0,0)
-        self.setScale(0.75,0.75,0.75)
         
         self.points = []
         self.point_index = 0
@@ -47,7 +46,7 @@ class Robot(NodePath):
         self.size = robot_size # meters
         
     
-    # navigate to given point
+    # navigate to given location name
     def navigate_to_location(self,zone_name):
         zone = self.scene.zones.get(zone_name)
         if not zone:
@@ -59,7 +58,11 @@ class Robot(NodePath):
         x = int(sum(v[0] for v in zone_verts)/len(zone_verts))
         y = int(sum(v[1] for v in zone_verts)/len(zone_verts))
                 
-        self.points = self.calculate_points([x,y])
+        self.navigate_to_point([x,y])
+        
+    def navigate_to_point(self,point):
+        
+        self.points = self.calculate_points(point)
         self.point_index = 0
         
     def calculate_points(self,target):
@@ -67,6 +70,7 @@ class Robot(NodePath):
         pos = [pos[0],pos[1]] # vector to list
         start = self.scene.sim_to_grid([pos[0],pos[1]]) # convert simulation space to grid
         points = aStarSearch(self.scene.grid,start,target)
+
         if not len(points):
             return []
         

@@ -35,43 +35,155 @@ double calculateHValue(int row, int col, Pair dest) {
                 (col - dest.second) * (col - dest.second));
 }
 
-// Trace path from destination to source
-std::vector<std::pair<int, int>> tracePath(
-    const std::vector<std::vector<cell>>& cellDetails, Pair dest) {
-    
+std::vector<std::pair<int,int>> tracePath(
+    const std::vector<std::vector<cell>>& cellDetails,
+    std::pair<int,int> dest)
+{
     int row = dest.first;
     int col = dest.second;
+
+    std::vector<std::pair<int,int>> path;
+
     int dx = cellDetails[row][col].parent_i - row;
     int dy = cellDetails[row][col].parent_j - col;
-    int temp_row, temp_col;
 
-    std::stack<Pair> Path;
-    std::vector<std::pair<int, int>> resultPath;
+    // push destination (x, y)
+    path.emplace_back(col, row);
 
-    Path.push(make_pair(dest.first, dest.second));
     while (!(cellDetails[row][col].parent_i == row &&
-             cellDetails[row][col].parent_j == col)) {
-        if (!((dx == cellDetails[row][col].parent_i - row) &&
-              dy == cellDetails[row][col].parent_j - col)) {
-            Path.push(make_pair(row, col));
-            dx = cellDetails[row][col].parent_i - row;
-            dy = cellDetails[row][col].parent_j - col;
+             cellDetails[row][col].parent_j == col))
+    {
+        int new_dx = cellDetails[row][col].parent_i - row;
+        int new_dy = cellDetails[row][col].parent_j - col;
+
+        if (new_dx != dx || new_dy != dy) {
+            path.emplace_back(col, row);
+            dx = new_dx;
+            dy = new_dy;
         }
 
-        temp_row = cellDetails[row][col].parent_i;
-        temp_col = cellDetails[row][col].parent_j;
+        int temp_row = cellDetails[row][col].parent_i;
+        int temp_col = cellDetails[row][col].parent_j;
+
         row = temp_row;
         col = temp_col;
     }
-    Path.push(make_pair(row, col));
 
-    while (!Path.empty()) {
+    // push source
+    path.emplace_back(col, row);
 
-        auto cell = Path.top();
-        resultPath.push_back({cell.second, cell.first});
-        Path.pop();
+    std::reverse(path.begin(), path.end());
+    return path;
+}
+
+bool hasLineOfSight(
+    const std::vector<std::vector<int>>& grid,
+    std::pair<int,int> start,
+    std::pair<int,int> end,
+    double step = 0.5)
+{
+    double x0 = start.first;
+    double y0 = start.second;
+    double x1 = end.first;
+    double y1 = end.second;
+
+    double dx = x1 - x0;
+    double dy = y1 - y0;
+
+    double dist = std::sqrt(dx*dx + dy*dy);
+    int steps = static_cast<int>(dist / step);
+
+    if (steps == 0) return true;
+
+    for (int i = 0; i <= steps; i++) {
+        double t = static_cast<double>(i) / steps;
+
+        double x = x0 + t * dx;
+        double y = y0 + t * dy;
+
+        int gx = static_cast<int>(std::round(x));
+        int gy = static_cast<int>(std::round(y));
+
+        if (gy < 0 || gx < 0 ||
+            gy >= (int)grid.size() ||
+            gx >= (int)grid[0].size())
+            return false;
+
+        if (grid[gy][gx] == 0)
+            return false;
     }
-    return resultPath;
+
+    return true;
+}
+
+std::vector<std::pair<int,int>> smoothPath(
+    const std::vector<std::vector<int>>& grid,
+    const std::vector<std::pair<int,int>>& path)
+{
+    if (path.empty())
+        return {};
+
+    std::vector<std::pair<int,int>> smoothed;
+    smoothed.push_back(path[0]);
+
+    int start_idx = 0;
+    int n = path.size();
+
+    while (start_idx < n - 1) {
+        int last_valid = start_idx + 1;
+
+        for (int end_idx = n - 1; end_idx > start_idx; --end_idx) {
+            if (hasLineOfSight(grid, path[start_idx], path[end_idx])) {
+                last_valid = end_idx;
+                break;
+            }
+        }
+
+        if (last_valid <= start_idx) {
+            throw std::runtime_error("Smoothing failed: no forward progress");
+        }
+
+        smoothed.push_back(path[last_valid]);
+        start_idx = last_valid;
+    }
+
+    return smoothed;
+}
+
+std::vector<std::vector<int>> marginizeGrid(
+    const std::vector<std::vector<int>>& grid,
+    double cell_size,
+    double robot_size)
+{
+    int rows = grid.size();
+    int cols = grid[0].size();
+
+    int radius_cells = std::ceil((robot_size / 2.0) / cell_size);
+
+    std::vector<std::vector<int>> inflated = grid;
+
+    for (int y = 0; y < rows; y++) {
+        for (int x = 0; x < cols; x++) {
+            if (grid[y][x] == 0) {
+                for (int dy = -radius_cells; dy <= radius_cells; dy++) {
+                    for (int dx = -radius_cells; dx <= radius_cells; dx++) {
+                        int nx = x + dx;
+                        int ny = y + dy;
+
+                        if (nx >= 0 && ny >= 0 &&
+                            nx < cols && ny < rows)
+                        {
+                            if (dx*dx + dy*dy <= radius_cells * radius_cells) {
+                                inflated[ny][nx] = 0;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return inflated;
 }
 
 // A* search on dynamic grid
@@ -176,6 +288,7 @@ PYBIND11_MODULE(pathfinding, m) {
         [](const std::vector<std::vector<int>>& grid,
            py::sequence src_seq,
            py::sequence dest_seq) {
+
             if (src_seq.size() != 2 || dest_seq.size() != 2)
                 throw std::runtime_error("src and dest must each be length-2 sequences");
 
@@ -186,5 +299,15 @@ PYBIND11_MODULE(pathfinding, m) {
         },
         py::arg("grid"),
         py::arg("src"),
-        py::arg("dest"));
+        py::arg("dest")
+    );
+
+    // ✅ Add this
+    m.def("marginizeGrid",
+        &marginizeGrid,
+        py::arg("grid"),
+        py::arg("cell_size"),
+        py::arg("robot_size"),
+        "Inflate obstacles based on robot size"
+    );
 }

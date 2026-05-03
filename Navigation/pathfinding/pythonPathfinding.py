@@ -23,88 +23,6 @@ def is_destination(row: int, col: int, dest: Tuple[int, int]) -> bool:
 def calculate_h_value(row: int, col: int, dest: Tuple[int, int]) -> float:
     return math.sqrt((row - dest[0]) ** 2 + (col - dest[1]) ** 2)
 
-def has_line_of_sight(grid, start, end, step=0.5):
-    x0, y0 = start
-    x1, y1 = end
-    dx = x1 - x0
-    dy = y1 - y0
-    dist = (dx**2 + dy**2)**0.5
-    steps = int(dist / step)
-    for i in range(steps + 1):
-        t = i / steps
-        x = x0 + t * dx
-        y = y0 + t * dy
-        gx, gy = int(round(x)), int(round(y))
-        if gx < 0 or gy < 0 or gx >= len(grid[0]) or gy >= len(grid):
-            return False
-        if grid[gy][gx] == 0:  # obstacle
-            return False
-    return True
-
-
-def smooth_path(grid, path: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
-    if not path:
-        return []
-
-    smoothed = [path[0]]
-    start_idx = 0
-    n = len(path)
-
-    while start_idx < n - 1:
-        # Find the farthest reachable point from start_idx
-        last_valid = start_idx + 1
-        for end_idx in range(n - 1, start_idx, -1):
-            if has_line_of_sight(grid, path[start_idx], path[end_idx]):
-                last_valid = end_idx
-                break
-
-        # Append the farthest reachable point
-        smoothed.append(path[last_valid])
-
-        # Move start to that point to continue smoothing
-        start_idx = last_valid
-
-        # Safety check: if start_idx didn't move, increment by 1 to avoid infinite loop
-        if start_idx == last_valid and start_idx < n - 1:
-            start_idx += 1
-
-    return smoothed
-
-def trace_path(cell_details: List[List["Cell"]], dest: Tuple[int, int]) -> List[Tuple[int, int]]:
-    
-    row, col = dest
-    path = []
-    
-    # Track initial direction
-    dx = cell_details[row][col].parent_i - row
-    dy = cell_details[row][col].parent_j - col
-    
-    # Push destination first
-    path.append((col, row))  # output as (x, y)
-    
-    # Trace back to source
-    while not (cell_details[row][col].parent_i == row and 
-               cell_details[row][col].parent_j == col):
-        new_dx = cell_details[row][col].parent_i - row
-        new_dy = cell_details[row][col].parent_j - col
-        
-        # Only append a point when direction changes
-        if (new_dx, new_dy) != (dx, dy):
-            path.append((col, row))
-            dx, dy = new_dx, new_dy
-        
-        # Move to parent
-        temp_row = cell_details[row][col].parent_i
-        temp_col = cell_details[row][col].parent_j
-        row, col = temp_row, temp_col
-    
-    # Append source
-    path.append((col, row))
-    
-    # Reverse path to get from start → destination
-    path.reverse()
-    
-    return path
 
 def a_star_search(grid: List[List[int]], src: Tuple[int, int], dest: Tuple[int, int]) -> List[Tuple[int, int]]:
     if not grid or not grid[0]:
@@ -177,3 +95,119 @@ def a_star_search(grid: List[List[int]], src: Tuple[int, int], dest: Tuple[int, 
                         cell_details[new_i][new_j].parent_j = j
     
     return []  
+
+def trace_path(cell_details: List[List["Cell"]], dest: Tuple[int, int]) -> List[Tuple[int, int]]:
+    
+    row, col = dest
+    path = []
+    
+    # Track initial direction
+    dx = cell_details[row][col].parent_i - row
+    dy = cell_details[row][col].parent_j - col
+    
+    # Push destination first
+    path.append((col, row))  # output as (x, y)
+    
+    # Trace back to source
+    while not (cell_details[row][col].parent_i == row and 
+               cell_details[row][col].parent_j == col):
+        new_dx = cell_details[row][col].parent_i - row
+        new_dy = cell_details[row][col].parent_j - col
+        
+        # Only append a point when direction changes
+        if (new_dx, new_dy) != (dx, dy):
+            path.append((col, row))
+            dx, dy = new_dx, new_dy
+        
+        # Move to parent
+        temp_row = cell_details[row][col].parent_i
+        temp_col = cell_details[row][col].parent_j
+        row, col = temp_row, temp_col
+    
+    # Append source
+    path.append((col, row))
+    
+    # Reverse path to get from start → destination
+    path.reverse()
+    
+    return path
+
+def has_line_of_sight(grid, start, end, step=0.5):
+    x0, y0 = start
+    x1, y1 = end
+    dx = x1 - x0
+    dy = y1 - y0
+    dist = (dx**2 + dy**2)**0.5
+    steps = int(dist / step)
+    for i in range(steps + 1):
+        t = i / steps
+        x = x0 + t * dx
+        y = y0 + t * dy
+        gx, gy = int(round(x)), int(round(y))
+        if gx < 0 or gy < 0 or gx >= len(grid[0]) or gy >= len(grid):
+            return False
+        if grid[gy][gx] == 0:  # obstacle
+            return False
+    return True
+
+def smooth_path(grid, path: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+    if not path:
+        return []
+
+    smoothed = [path[0]]
+    start_idx = 0
+    n = len(path)
+
+    while start_idx < n - 1:
+        last_valid = start_idx + 1
+
+        for end_idx in range(n - 1, start_idx, -1):
+            if has_line_of_sight(grid, path[start_idx], path[end_idx]):
+                last_valid = end_idx
+                break
+
+        # This should ALWAYS move forward
+        if last_valid <= start_idx:
+            raise RuntimeError("Smoothing failed: no forward progress")
+
+        smoothed.append(path[last_valid])
+        start_idx = last_valid
+
+    return smoothed
+
+def marginize_grid(grid: List[List[int]], cell_size: float, robot_size: float) -> List[List[int]]:
+    """
+    Inflate obstacles in a grid to account for robot size.
+
+    Args:
+        grid: 2D list (1 = free, 0 = obstacle)
+        cell_size: size of one grid cell (e.g., meters)
+        robot_size: robot diameter (same unit as cell_size)
+
+    Returns:
+        New grid with inflated obstacles
+    """
+
+    rows = len(grid)
+    cols = len(grid[0])
+
+    radius_cells = math.ceil((robot_size / 2) / cell_size)
+
+    # Copy grid
+    inflated = [row[:] for row in grid]
+
+    for y in range(rows):
+        for x in range(cols):
+            if grid[y][x] == 0:
+                # Inflate this obstacle
+                for dy in range(-radius_cells, radius_cells + 1):
+                    for dx in range(-radius_cells, radius_cells + 1):
+                        nx = x + dx
+                        ny = y + dy
+
+                        if 0 <= nx < cols and 0 <= ny < rows:
+                            # Circular inflation (better than square)
+                            if dx*dx + dy*dy <= radius_cells * radius_cells:
+                                inflated[ny][nx] = 0
+
+    return inflated

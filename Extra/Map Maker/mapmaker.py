@@ -60,7 +60,7 @@ class SaveLoadMapBuilder:
         # 2. Measurements
         tk.Label(toolbar, text=" | ", bg="#2c3e50", fg="gray").pack(side=tk.LEFT, padx=5)
         
-        self.scale_slider = tk.Scale(toolbar, from_=10, to=100, orient=tk.HORIZONTAL, command=self.update_grid_size, 
+        self.scale_slider = tk.Scale(toolbar, from_=1, to=100, orient=tk.HORIZONTAL, command=self.update_grid_size, 
                          showvalue=1, length=200, bg="#2c3e50", fg="white", highlightthickness=0)
         self.scale_slider.set(DEFAULT_GRID_SIZE)
         self.scale_slider.pack(side=tk.LEFT, padx=2)

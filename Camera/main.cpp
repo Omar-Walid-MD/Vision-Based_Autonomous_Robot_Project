@@ -2,6 +2,12 @@
 #include <iostream>
 #include <chrono>
 #include <opencv2/calib3d.hpp>
+//~ #include <nlohmann/json.hpp>
+#include <gst/app/gstappsink.h>
+#include <gst/app/gstappsrc.h>
+#include <signal.h>
+
+//~ #include "Node.h"
 #include <nlohmann/json.hpp>
 #include <gst/app/gstappsink.h>
 #include <gst/app/gstappsrc.h>
@@ -16,6 +22,8 @@ extern "C" {
 #include <apriltag/apriltag_pose.h>
 
 }
+
+
 
 
 
@@ -91,10 +99,37 @@ void handle_sigint(int)
 }
 
 
+GstElement *global_input_pipe = nullptr;
+GstElement *global_output_pipe = nullptr;
+
+
+void handle_sigint(int)
+{
+    std::cout << "\nStopping...\n";
+
+    if (global_input_pipe)
+    {
+        gst_element_set_state(global_input_pipe, GST_STATE_NULL);
+        gst_object_unref(global_input_pipe);
+    }
+
+    if (global_output_pipe)
+    {
+        gst_element_set_state(global_output_pipe, GST_STATE_NULL);
+        gst_object_unref(global_output_pipe);
+    }
+
+    system("rm -f /tmp/camera_stream*");
+
+    exit(0);
+}
+
+
 int main(int argc, char* argv[]) {
     
     // Parse command-line argument for --show or -s
     bool show = false;
+    double detect_scale = 0.25;
     double detect_scale = 0.25;
 
     
@@ -106,6 +141,7 @@ int main(int argc, char* argv[]) {
                 detect_scale = std::atof(argv[++i]);
                 if (detect_scale <= 0.0 || detect_scale > 1.0) {
                     std::cerr << "Invalid scale value. Using default 0.5\n";
+                    detect_scale = 0.25;
                     detect_scale = 0.25;
                 }
             }
@@ -230,6 +266,7 @@ int main(int argc, char* argv[]) {
 
     double tag_size = 0.095; // meters
 
+    //~ SocketNode my_node("camera");
     SocketNode my_node("camera");
     
     if(show)
@@ -242,6 +279,7 @@ int main(int argc, char* argv[]) {
     // Inside the detection loop, after getting 'det'
 
     //~ cv::Mat frame;
+    //~ cv::Mat frame;
 
     // FPS measurement
     int frame_count = 0;
@@ -250,6 +288,19 @@ int main(int argc, char* argv[]) {
     while (true) {
         auto loop_start = std::chrono::steady_clock::now();
 
+        //~ cap >> frame;
+        //~ if (frame.empty()) {
+            //~ std::cerr << "Blank frame grabbed\n";
+            //~ break;
+        //~ }
+        
+        GstSample *sample = gst_app_sink_pull_sample(GST_APP_SINK(appsink));
+
+        GstBuffer *buffer = gst_sample_get_buffer(sample);
+        GstMapInfo map;
+        gst_buffer_map(buffer, &map, GST_MAP_READ);
+
+        cv::Mat frame(1296, 2304, CV_8UC1, (void*)map.data);
         //~ cap >> frame;
         //~ if (frame.empty()) {
             //~ std::cerr << "Blank frame grabbed\n";
@@ -343,6 +394,17 @@ int main(int argc, char* argv[]) {
             cout << "------------------------" << endl;
             
             // Build JSON object
+            //~ nlohmann::json j;
+            
+            //~ j["id"] = det->id;
+            //~ j["pose"] = {
+                //~ {"position", {t.at<double>(0), t.at<double>(1), t.at<double>(2)}},
+                //~ {"rotation", {roll, pitch, yaw}}
+            //~ };
+            
+            //~ my_node.send("apriltag_detected", j.dump());
+            
+            // Build JSON object
             nlohmann::json j;
             
             j["id"] = det->id;
@@ -418,6 +480,17 @@ int main(int argc, char* argv[]) {
        gst_app_src_push_buffer(GST_APP_SRC(appsrc), out_buffer);
        gst_buffer_unmap(buffer, &map);
        gst_sample_unref(sample);
+        
+       
+       GstBuffer *out_buffer = gst_buffer_new_allocate(nullptr, map.size, nullptr);
+       GstMapInfo out_map;
+       gst_buffer_map(out_buffer, &out_map, GST_MAP_WRITE);
+       memcpy(out_map.data, map.data, map.size);
+       
+       gst_buffer_unmap(out_buffer, &out_map);
+       gst_app_src_push_buffer(GST_APP_SRC(appsrc), out_buffer);
+       gst_buffer_unmap(buffer, &map);
+       gst_sample_unref(sample);
             
 
     
@@ -459,7 +532,9 @@ int main(int argc, char* argv[]) {
     apriltag_detector_destroy(td);
     tag36h11_destroy(tf);
     //~ cap.release();
+    //~ cap.release();
     if(show) cv::destroyAllWindows();
 
     return 0;
 }
+
