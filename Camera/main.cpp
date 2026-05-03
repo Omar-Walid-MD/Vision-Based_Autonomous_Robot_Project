@@ -3,8 +3,11 @@
 #include <chrono>
 #include <opencv2/calib3d.hpp>
 #include <nlohmann/json.hpp>
+#include <gst/app/gstappsink.h>
+#include <gst/app/gstappsrc.h>
+#include <signal.h>
 
-#include "Node.h"
+//~ #include "Node.h"
 
 extern "C" {
 #include <apriltag/apriltag.h>
@@ -14,14 +17,16 @@ extern "C" {
 
 }
 
+
+
 using namespace cv;
 using namespace std;
 
-// compilation command:
-// g++ apriltag.cpp -o apriltag `pkg-config --cflags --libs opencv4 gstreamer-1.0 gstreamer-app-1.0` -lapriltag -lpthread -std=c++17 -Wall
+// compilation command without node:
+// g++ main.cpp -o apriltag `pkg-config --cflags --libs opencv4 gstreamer-1.0 gstreamer-app-1.0` -lapriltag -lpthread -std=c++17 -Wall
     
-    
-// g++ apriltag.cpp Node.cpp -o apriltag \
+// compilation command with node
+// g++ main.cpp Node.cpp -o main \
     `pkg-config --cflags --libs opencv4 gstreamer-1.0 gstreamer-app-1.0` \
     -I/usr/local/include \
     -L/usr/local/lib -lsioclient \
@@ -60,11 +65,37 @@ Vec3d rotationMatrixToEulerAngles(Mat R)
 }
 
 
+GstElement *global_input_pipe = nullptr;
+GstElement *global_output_pipe = nullptr;
+
+
+void handle_sigint(int)
+{
+    std::cout << "\nStopping...\n";
+
+    if (global_input_pipe)
+    {
+        gst_element_set_state(global_input_pipe, GST_STATE_NULL);
+        gst_object_unref(global_input_pipe);
+    }
+
+    if (global_output_pipe)
+    {
+        gst_element_set_state(global_output_pipe, GST_STATE_NULL);
+        gst_object_unref(global_output_pipe);
+    }
+
+    system("rm -f /tmp/camera_stream*");
+
+    exit(0);
+}
+
+
 int main(int argc, char* argv[]) {
     
     // Parse command-line argument for --show or -s
     bool show = false;
-    double detect_scale = 0.5;
+    double detect_scale = 0.25;
 
     
     for (int i = 1; i < argc; ++i) {
@@ -75,7 +106,7 @@ int main(int argc, char* argv[]) {
                 detect_scale = std::atof(argv[++i]);
                 if (detect_scale <= 0.0 || detect_scale > 1.0) {
                     std::cerr << "Invalid scale value. Using default 0.5\n";
-                    detect_scale = 0.5;
+                    detect_scale = 0.25;
                 }
             }
         }
@@ -101,26 +132,79 @@ int main(int argc, char* argv[]) {
                            //~ "video/x-raw,format=BGR ! "
                            //~ "appsink";
                            
-    std::string pipeline = "libcamerasrc ! "
-       "video/x-raw,width=2304,height=1296,framerate=50/1 ! "
-       "v4l2convert ! "
-       "video/x-raw,format=YV12 ! "
-       "appsink";
-                           
+    //~ std::string pipeline = "libcamerasrc ! "
+       //~ "video/x-raw,width=2304,height=1296,framerate=50/1 ! "
+       //~ "v4l2convert ! "
+       //~ "video/x-raw,format=YV12 ! "
+       //~ "appsink";
+       
+       
+    gst_init(&argc, &argv);
+    
+    signal(SIGINT, handle_sigint);
+    
+       
+    std::string input_pipeline = "libcamerasrc ! queue max-size-buffers=1 leaky=downstream ! "
+    "video/x-raw,width=2304,height=1296,framerate=30/1 ! "
+    "v4l2convert ! "
+    "video/x-raw,format=YV12 ! "
+    "appsink name=camera_sink drop=true max-buffers=1 sync=false";
+    
+    std::string output_pipeline =
+    "appsrc name=python_src is-live=true block=false format=time ! "
+    "video/x-raw,format=BGR,width=640,height=360,framerate=30/1 ! "
+    "queue leaky=2 max-size-buffers=2 ! "
+    "shmsink socket-path=/tmp/camera_stream sync=false wait-for-connection=false";
+    
+    GError *err = nullptr;
 
-
-    std::cout << "Opening pipeline...\n";
-
-    cv::VideoCapture cap(pipeline, cv::CAP_GSTREAMER);
-
-    std::cout << "After constructor\n";
-
-    if (!cap.isOpened()) {
-        std::cerr << "Cannot open camera\n";
+    GstElement *input_pipe = gst_parse_launch(input_pipeline.c_str(), &err);
+    if (!input_pipe) {
+        std::cerr << "Failed to create input pipeline: "
+                  << (err ? err->message : "unknown") << std::endl;
         return -1;
     }
 
-    std::cout << "Opened successfully\n";
+    GstElement *output_pipe = gst_parse_launch(output_pipeline.c_str(), &err);
+    if (!output_pipe) {
+        std::cerr << "Failed to create output pipeline: "
+                  << (err ? err->message : "unknown") << std::endl;
+        return -1;
+    }
+
+    GstElement *appsink = gst_bin_get_by_name(GST_BIN(input_pipe), "camera_sink");
+    GstElement *appsrc  = gst_bin_get_by_name(GST_BIN(output_pipe), "python_src");
+
+    if (!appsink) {
+        std::cerr << "Could not find camera_sink\n";
+        return -1;
+    }
+
+    if (!appsrc) {
+        std::cerr << "Could not find python_src\n";
+        return -1;
+    }
+
+    gst_element_set_state(input_pipe, GST_STATE_PLAYING);
+    gst_element_set_state(output_pipe, GST_STATE_PLAYING);
+    
+    global_input_pipe = input_pipe;
+    global_output_pipe = output_pipe;
+                           
+
+
+    //~ std::cout << "Opening pipeline...\n";
+
+    //~ cv::VideoCapture cap(pipeline, cv::CAP_GSTREAMER);
+
+    //~ std::cout << "After constructor\n";
+
+    //~ if (!cap.isOpened()) {
+        //~ std::cerr << "Cannot open camera\n";
+        //~ return -1;
+    //~ }
+
+    //~ std::cout << "Opened successfully\n";
 
     apriltag_family_t *tf = tag36h11_create();
     apriltag_detector_t *td = apriltag_detector_create();
@@ -157,7 +241,7 @@ int main(int argc, char* argv[]) {
     
     // Inside the detection loop, after getting 'det'
 
-    cv::Mat frame;
+    //~ cv::Mat frame;
 
     // FPS measurement
     int frame_count = 0;
@@ -166,11 +250,19 @@ int main(int argc, char* argv[]) {
     while (true) {
         auto loop_start = std::chrono::steady_clock::now();
 
-        cap >> frame;
-        if (frame.empty()) {
-            std::cerr << "Blank frame grabbed\n";
-            break;
-        }
+        //~ cap >> frame;
+        //~ if (frame.empty()) {
+            //~ std::cerr << "Blank frame grabbed\n";
+            //~ break;
+        //~ }
+        
+        GstSample *sample = gst_app_sink_pull_sample(GST_APP_SINK(appsink));
+
+        GstBuffer *buffer = gst_sample_get_buffer(sample);
+        GstMapInfo map;
+        gst_buffer_map(buffer, &map, GST_MAP_READ);
+
+        cv::Mat frame(1296, 2304, CV_8UC1, (void*)map.data);
 
         
 
@@ -315,6 +407,17 @@ int main(int argc, char* argv[]) {
                         0.7, Scalar(0,0,255), 2);
             }
         }
+        
+       
+       GstBuffer *out_buffer = gst_buffer_new_allocate(nullptr, map.size, nullptr);
+       GstMapInfo out_map;
+       gst_buffer_map(out_buffer, &out_map, GST_MAP_WRITE);
+       memcpy(out_map.data, map.data, map.size);
+       
+       gst_buffer_unmap(out_buffer, &out_map);
+       gst_app_src_push_buffer(GST_APP_SRC(appsrc), out_buffer);
+       gst_buffer_unmap(buffer, &map);
+       gst_sample_unref(sample);
             
 
     
@@ -355,7 +458,7 @@ int main(int argc, char* argv[]) {
     // Cleanup
     apriltag_detector_destroy(td);
     tag36h11_destroy(tf);
-    cap.release();
+    //~ cap.release();
     if(show) cv::destroyAllWindows();
 
     return 0;
