@@ -1,0 +1,7 @@
+#!/bin/bash
+
+SESSION_NAME="MyProject"
+
+tmux kill-session -t "$SESSION_NAME" 2>/dev/null
+
+echo "Session stopped."

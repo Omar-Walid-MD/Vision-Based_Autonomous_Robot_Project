@@ -256,7 +256,7 @@ std::vector<std::pair<int,int>> aStarSearch(
                 if (isDestination(new_i, new_j, dest)) {
                     cellDetails[new_i][new_j].parent_i = i;
                     cellDetails[new_i][new_j].parent_j = j;
-                    return tracePath(cellDetails, dest);
+                    return smoothPath(grid,tracePath(cellDetails, dest));
                 }
                 else if (!closedList[new_i][new_j] && isUnBlocked(grid, new_i, new_j)) {
                     double gNew = cellDetails[i][j].g + cost_g[k];
