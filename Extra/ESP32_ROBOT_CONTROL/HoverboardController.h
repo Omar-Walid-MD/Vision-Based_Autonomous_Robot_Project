@@ -18,8 +18,8 @@ struct CalibCycle {
   int speed;
 };
 
-#define START_SPEED 100
-#define MINIMUM_SPEED 50
+#define START_SPEED 90
+#define MINIMUM_SPEED 40
 
 #define STALL_TIME 750
 
@@ -27,11 +27,7 @@ struct CalibCycle {
 #define WHEEL_BASE 0.465f    // meters (distance between wheels)
 #define TICKS_PER_REV 90      // from hall sensors
 
-#define BRAKE_DISTANCE_METERS 0.50f
-
-#define HOVER_SWITCH 14
-
-
+#define HOVER_SWITCH 13
 
 
 class HoverboardController {
@@ -65,7 +61,7 @@ public:
     void reset()
     {
       off();
-      delay(500);
+      delay(200);
       on();
     }
 
@@ -92,19 +88,21 @@ public:
         setDirection(_dir);
     }
 
+
+    // change direction
     void setDirection(const int* newDir)
     {
       _dir[0] = newDir[0]; _dir[1] = newDir[1];
 
       if(_motionState == MOVING)
       {
-        _speedLeft = (int) (_dir[0] * _linearSpeedLeft * _brakingFactor);
-        _speedRight = (int) (_dir[1] * _linearSpeedRight * _brakingFactor);
+        _speedLeft = (int) (_dir[0] * _linearSpeedLeft * _leftBrakingFactor * leftLinearCal);
+        _speedRight = (int) (_dir[1] * _linearSpeedRight * _rightBrakingFactor);
       }
       else if(_motionState == ROTATING)
       {
-        _speedLeft = (int) (_dir[0] * _baseSpeedLeft * _cal[0] * _brakingFactor);
-        _speedRight = (int) (_dir[1] * _baseSpeedRight * _cal[1] * _brakingFactor);
+        _speedLeft = (int) (_dir[0] * _baseSpeedLeft * _cal[0] * _leftBrakingFactor);
+        _speedRight = (int) (_dir[1] * _baseSpeedRight * _cal[1] * _rightBrakingFactor);
       }
       else
       {
@@ -171,6 +169,8 @@ public:
       }
 
       updateMotion();
+      updateOdometry();
+      updatePath();
 
       // ---- RECEIVE BOARD A (limited) ----
       SerialHover2Server tmpFeedbackA;
@@ -199,6 +199,10 @@ public:
           // _ble.send("Speed L: "+String(abs(_speedLeft)));
           // _ble.send("Speed R: "+String(abs(_speedLeft)));
           // sendOdomBLE(_feedbackA.iOdom, _feedbackB.iOdom);
+
+          // _ble.send("X: " + String(getPosX()) +"\nY: " + String(getPosY()) + "\nR: " + String(getHeadingDeg()));
+          // _ble.send("Diff: " + String(getWheelDifferenceCm()));
+          
           _lastBle = now;
       }
   }
@@ -252,38 +256,101 @@ public:
     }
 
 
+    void startPath(PathCommand* cmds, int length)
+    {
+        if (length <= 0) return;
+
+        stopPath();
+
+        _pathLength = min(length, MAX_PATH_CMDS);
+
+        for (int i = 0; i < _pathLength; i++)
+        {
+            _path[i] = cmds[i];
+        }
+
+        _pathIndex = 0;
+        _pathRunning = true;
+
+        runNextPathCommand();
+    }
+
+    void runNextPathCommand()
+    {
+        if (!_pathRunning) return;
+
+        if (_pathIndex >= _pathLength)
+        {
+            stopPath();
+            _ble.send("path_complete");
+            return;
+        }
+
+        PathCommand& cmd = _path[_pathIndex];
+
+        if (cmd.type == PATH_MOVE)
+        {
+            move(cmd.value);
+        }
+        else if (cmd.type == PATH_ROTATE)
+        {
+            rot(cmd.value);
+        }
+    }
+
+    void stopPath()
+    {
+        _pathRunning = false;
+
+        _pathLength = 0;
+        _pathIndex = 0;
+
+        _waitingNextPathCmd = false;
+        _nextPathCmdTime = 0;
+
+        stopMotion();
+    }
 
     void move(float centimeters)
     {
         if (_motionState != IDLE) return;
-
-        _motionState = MOVING;
 
         _leftStart  = getLeftOdom();
         _rightStart = getRightOdom();
 
         _linearTarget = metersToTicks(centimeters / 100.0f);
 
-        _brakingFactor = 1;
+        if(startIMU) _startYaw   = _imu.getMagYaw();
+
+        leftLinearCal = _cal[0];
+
+        brakeTicks = metersToTicks(brakeDistance);
+
+        _leftBrakingFactor = 1;
+        _rightBrakingFactor = 1;
 
         if (centimeters > 0)
             setDirection(FORWARD);
         else
             setDirection(BACKWARD);
 
+        _motionState = MOVING;
+
+        delay(100);
+
         _ble.send("moving");
     }
 
 
     void rot(float degrees) {
-        if (_motionState != IDLE) return;
 
-        _motionState = ROTATING;
+        if (_motionState != IDLE) return;
 
         _leftStart  = getLeftOdom();
         _rightStart = getRightOdom();
 
-        _brakingFactor = 1;
+        _leftBrakingFactor = 1;
+        _rightBrakingFactor = 1;
         // _yawTarget = _imu.getOffsetMagYaw(degrees);
 
         int32_t ticks = degreesToTurnTicks(degrees);
@@ -301,16 +368,14 @@ public:
           _turnDir = 1;
         }
 
-        // if(abs(degrees) <= 180)
-        // {
-        brakeTicks = metersToTicks(BRAKE_DISTANCE_METERS);
-        // }
-        // else
-        // {
-        //   brakeTicks = (int) (1.25 * metersToTicks(BRAKE_DISTANCE_METERS));
-        // }
+        int32_t maxBrakeTicks = degreesToTurnTicks(60);
+        brakeTicks = min(maxBrakeTicks,(int32_t) (abs(_turnTarget) * 0.5f));
+        
+        _motionState = ROTATING;
 
         _ble.send("rotating");
+
+        delay(100);
     }
 
     void stopMotion() {
@@ -327,14 +392,29 @@ public:
         _leftStart = 0;
         _rightStart = 0;
 
-        _brakingFactor = 1;
+        _leftBrakingFactor = 1;
+        _rightBrakingFactor = 1;
 
+    }
+
+    void updatePath()
+    {
+        if (!_pathRunning) return;
+
+        if (_waitingNextPathCmd)
+        {
+            if (millis() >= _nextPathCmdTime)
+            {
+                _waitingNextPathCmd = false;
+                runNextPathCommand();
+            }
+        }
     }
     
     void updateMotion()
     {
 
-        handleStall();
+        // handleStall();
 
         if (_motionState == IDLE) return;
 
@@ -355,6 +435,22 @@ public:
             // PD correction
             int correction = (int)(error * kP);
 
+            if(startIMU)
+            {
+              // --- yaw correction ---
+              float currentYaw = _imu.getMagYaw();
+              float yawError = currentYaw - _startYaw;
+
+              // handle wrap-around (e.g. 359 -> 1 should be +2, not -358)
+              if (yawError >  180.0f) yawError -= 360.0f;
+              if (yawError < -180.0f) yawError += 360.0f;
+
+              // combine: odometry keeps wheels equal, yaw keeps heading locked
+              correction = (int)(error * kP + yawError * kYaw);
+            }
+
+
+
             _linearSpeedLeft  = _baseSpeedLeft  - correction;
             _linearSpeedRight = _baseSpeedRight + correction;
 
@@ -369,13 +465,18 @@ public:
                 ? abs(dl)
                 : abs(dr);
 
+            float t = (float)progress / calibrationFadeTicks;
+            t = constrain(t, 0.0f, 1.0f);
+            leftLinearCal = _cal[0] + (1.0f - _cal[0]) * t;
+
             int32_t remaining = abs(_linearTarget) - progress;
 
             // braking
             if (remaining <= brakeTicks && remaining > 0)
             {
                 float f = (float)remaining / (float)brakeTicks;
-                _brakingFactor = constrain(f, 0.15f, 1.0f);
+                _leftBrakingFactor = constrain(f * leftBrakingFactorConstant, 0.15f, 1.0f);
+                _rightBrakingFactor = constrain(f, 0.15f, 1.0f);
 
                 setDirection(_dir);
             }
@@ -383,6 +484,16 @@ public:
             if (remaining <= 0)
             {
                 stopMotion();
+
+                if (_pathRunning)
+                {
+                    _pathIndex++;
+
+                    _waitingNextPathCmd = true;
+                    _nextPathCmdTime = millis() + _pathCmdDelay;
+                    return;
+                }
+                
                 _ble.send("stop linear");
                 return;
             }
@@ -403,7 +514,8 @@ public:
             if (remaining <= brakeTicks && remaining > 0)
             {
                 float f = (float)remaining / (float)brakeTicks;
-                _brakingFactor = constrain(f, 0.15f, 1.0f);
+                _leftBrakingFactor = constrain(f * leftBrakingFactorConstant, 0.15f, 1.0f);
+                _rightBrakingFactor = constrain(f, 0.15f, 1.0f);
 
                 setDirection(_dir);
             }
@@ -411,6 +523,16 @@ public:
             if (remaining <= 0)
             {
               stopMotion();
+
+              if (_pathRunning)
+              {
+                  _pathIndex++;
+
+                  _waitingNextPathCmd = true;
+                  _nextPathCmdTime = millis() + _pathCmdDelay;
+                  return;
+              }
+
               _ble.send("stop rotation");
               return;
 
@@ -420,9 +542,66 @@ public:
         }
     }
 
+    void updateOdometry() {
+        if (_lastAUpdate == 0 || _lastBUpdate == 0) return;
+
+        int32_t curL = getLeftOdom();
+        int32_t curR = getRightOdom();
+
+        int32_t dTicksL = curL - _prevLeftTicks;
+        int32_t dTicksR = curR - _prevRightTicks;
+
+        _prevLeftTicks  = curL;
+        _prevRightTicks = curR;
+
+        float tpm = ticksPerMeter();
+        float dL = dTicksL / tpm;
+        float dR = dTicksR / tpm;
+
+        float ds     = (dL + dR) * 0.5f;
+        float dTheta = (dR - dL) / WHEEL_BASE;
+
+        float midTheta = _heading + dTheta * 0.5f;
+
+        _posX    += ds * sinf(midTheta);
+        _posY    += ds * cosf(midTheta);
+        _heading += dTheta;
+
+        while (_heading >  M_PI) _heading -= 2.0f * M_PI;
+        while (_heading < -M_PI) _heading += 2.0f * M_PI;
+
+        _totalTicksL += dTicksL;
+        _totalTicksR += dTicksR;
+    }
+
+    float getPosX()    const { return _posX; }
+    float getPosY()    const { return _posY; }
+    float getHeadingRad() const { return _heading; }
+    float getHeadingDeg() const { return _heading * 180.0f / M_PI; }
+
+    float getWheelDifferenceCm() {
+        float tpm = ticksPerMeter();
+        return ((_totalTicksR - _totalTicksL) / tpm) * 100.0f; // cm
+    }
+
+    void resetPose() {
+        _posX = 0; _posY = 0; _heading = 0;
+        _prevLeftTicks = getLeftOdom();
+        _prevRightTicks = getRightOdom();
+
+        _totalTicksL = 0;
+        _totalTicksR = 0;
+
+    }
+
     void setKP(float kpNew)
     {
       kP = kpNew;
+    }
+
+    void setKYaw(float kyNew)
+    {
+      kYaw  = kyNew;
     }
 
     void setIdle()
@@ -432,23 +611,29 @@ public:
 
     void setLeftBrakingFactor(float factor)
     {
-      leftBrakingFactor = factor;
+      leftBrakingFactorConstant = factor;
     }
 
-    // ---- Accessors ----
-    // bool availableA() const {
-    //     return (millis() - _lastAUpdate) < 200;
-    // }
-
-    // bool availableB() const {
-    //     return (millis() - _lastBUpdate) < 200;
-    // }
+    void setBrakeDistance(float bd)
+    {
+      brakeDistance = bd;
+    }
 
     SerialHover2Server getA() const { return _feedbackA; }
     SerialHover2Server getB() const { return _feedbackB; }
 
     float getBattery() {
       return _feedbackA.iVolt / 100;
+    }
+
+    bool isIdle()
+    {
+      return _motionState == IDLE;
+    }
+
+    bool isDirection(const int* checkDir)
+    {
+      return _dir[0] == checkDir[0] && _dir[1] == checkDir[1];
     }
 
 private:
@@ -496,7 +681,7 @@ private:
     unsigned long _lastAUpdate = 0;
     unsigned long _lastBUpdate = 0;
 
-    float kP = 1.5f;
+    float kP = 3.5f;
 
     int32_t _leftStart = 0;
     int32_t _rightStart = 0;
@@ -506,8 +691,8 @@ private:
     float _yawTarget = 0;
     int _turnDir = 1;
 
-    float _brakingFactor = 1.0f;
-    
+    float _leftBrakingFactor = 1.0f;
+    float _rightBrakingFactor = 1.0f;
 
     uint32_t _leftStallStart = 0;
     uint32_t _rightStallStart = 0;
@@ -517,9 +702,46 @@ private:
 
     int32_t _lastMotionValue = 0;
 
-    int32_t brakeTicks = metersToTicks(BRAKE_DISTANCE_METERS);
+    float brakeDistance = 0.3f; //meters
 
-    float leftBrakingFactor = 1.0f;
+    int32_t brakeTicks = metersToTicks(brakeDistance);
+    int32_t calibrationFadeTicks = metersToTicks(0.15f); // first 15 cm
+
+    float leftBrakingFactorConstant = 0.75f;
+    float leftLinearCal = 1.0f;
+
+    int32_t _totalTicksL = 0;
+    int32_t _totalTicksR = 0;
+
+    // path variables
+
+    static const int MAX_PATH_CMDS = 20;
+
+    PathCommand _path[MAX_PATH_CMDS];
+
+    int _pathLength = 0;
+    int _pathIndex = 0;
+
+    bool _pathRunning = false;
+
+    bool _waitingNextPathCmd = false;
+
+    unsigned long _nextPathCmdTime = 0;
+
+    unsigned long _pathCmdDelay = 1000; // ms
+
+
+    // position tracking variables
+    // Odometry pose
+    float _posX    = 0.0f;   // metres, east
+    float _posY    = 0.0f;   // metres, north
+    float _heading = 0.0f;   // radians, 0 = north (Y+)
+
+    int32_t _prevLeftTicks  = 0;
+    int32_t _prevRightTicks = 0;
+
+    float _startYaw = 0.0f;
+    float kYaw = 2.0f; // tune this
 
     void sendCommands() {
         // Send via Serial1 TX (shared line)
@@ -600,5 +822,6 @@ private:
       }
     }
 };
+
 
 

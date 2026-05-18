@@ -251,7 +251,7 @@ void RotationSensor::update() {
     unsigned long now = millis();
 
     // Always update magnetometer reading first (this is what you want)
-    getYaw();
+    float yaw = getYaw();
 
     if (now - _lastBle >= _bleInterval) {
         _lastBle = now;
@@ -273,6 +273,10 @@ float RotationSensor::getMagYaw() {
     float currentMagYaw = mag_yaw - yaw_offset;   // Apply local zero
     if (currentMagYaw < 0) currentMagYaw += 360.0f;
     return currentMagYaw;
+}
+
+float RotationSensor::getCurrentYaw() {
+    return yaw;
 }
 
 float RotationSensor::getOffsetMagYaw(float offset) {

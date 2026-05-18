@@ -1,16 +1,17 @@
-from panda3d.core import NodePath, DirectionalLight, AmbientLight, CardMaker, Vec3, Texture
+from panda3d.core import NodePath, DirectionalLight, AmbientLight, CardMaker, Vec3, Texture, TransformState, Mat3
 from panda3d.core import (
     Geom, GeomNode, GeomTriangles,
     GeomVertexFormat, GeomVertexData,
     GeomVertexWriter, NodePath, TextNode
 )
-
+from classes.Tag import Tag
 import random
 import math
 import os
 import json
 
 this_directory = os.path.dirname(os.path.abspath(__file__))
+
 
 
 class Environment(NodePath):
@@ -48,59 +49,6 @@ class Environment(NodePath):
             for tag in scene.tags:
                 tag["object"] = Tag(scene,tag)
 
-
-TAG_HEIGHT = 1.5
-
-# class for displaying and marking April Tags in the simulation
-class Tag:
-    def __init__(self,scene,tag):
-        
-        id = tag["id"]
-        pos = tag["pos_meter"]
-        angle = tag["angle"]
-        
-        self.id = id
-        
-        size = 0.5
-        cm = CardMaker("quad")
-        cm.setFrame(-size, size, -size, size)   # (left, right, bottom, top)
-        self.quad = scene.render.attachNewNode(cm.generate())
-
-        self.angle = angle+90
-        self.quad.setPos(pos[0],-pos[1],TAG_HEIGHT) 
-        self.quad.setHpr(self.angle, 0, 0)
-        self.quad.setY(self.quad,-0.01) # move out of walls
-
-        # --- Load texture ---
-        idString = ("00000"+self.id)[-5:]
-        tex = scene.loader.loadTexture(f"textures/tags/tag36_11_{(idString)}.png")
-        tex.setMinfilter(Texture.FTNearest)
-        tex.setMagfilter(Texture.FTNearest)
-
-        tex.setFormat(Texture.F_rgba)   # force linear format (no sRGB)
-        self.quad.setTexture(tex)
-        self.quad.setLightOff()     # ignore scene lights
-        self.quad.setColor(1, 1, 1, 1)  # ensure no tinting (R,G,B,A)
-        
-        self.pointer = scene.loader.loadModel("models/misc/sphere")
-        self.pointer.setScale(0.1)
-        self.pointer.reparentTo(self.quad)
-        self.pointer.setLightOff()
-        self.pointer.setColor((1,0,1,1))
-        self.pointer.setTextureOff(1)
-    
-    # calculate robot position from detection offset   
-    def locate(self,offset,rotation):
-        angle = rotation[1]
-        rad_angle = math.radians(angle)
-        
-        pos = [0,0]
-        pos[0] = offset[0]*math.cos(rad_angle) - offset[2]*math.sin(rad_angle)
-        pos[1] = offset[0]*math.sin(rad_angle) + offset[2]*math.cos(rad_angle)
-
-        self.pointer.setPos(pos[0],-pos[1],offset[1])
-        self.pointer.setHpr(angle,0,0)
-        pass
 
 # class for showing named zones
 class Zone(NodePath):

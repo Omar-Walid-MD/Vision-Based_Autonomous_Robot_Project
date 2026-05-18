@@ -1,16 +1,15 @@
-#include "RotationSensor.h"
+#include "globals.h"
 #include <ble.h>
 #include "HoverboardController.h"
-#include "globals.h"
+#include "RotationSensor.h"
+// #include "ObstacleDetection.h"
 
 
-bool startIMU = false;
+
+bool canMoveForward = true;
 
 int batSendInterval =  10 * 1000;
 unsigned long batSendLast = 0;
-
-#define PWM_FREQ 5000      // 5 kHz is good for LEDs
-#define PWM_RESOLUTION 8         // 8-bit (0–255)
 
 // -------- PIN CONFIG --------
 
@@ -24,57 +23,25 @@ unsigned long batSendLast = 0;
 
 #define IMU_TOGGLE 19
 
-#define LED_R_PIN  37
-#define LED_G_PIN  36
-#define LED_B_PIN  35
 
 BLEModule ble;
 
 RotationSensor imu(ble);
 HoverboardController hover(Serial1, Serial2, ble, imu);
 
-void setRGB(uint8_t r, uint8_t g, uint8_t b) {
-  ledcWrite(LED_R_PIN, r);
-  ledcWrite(LED_G_PIN, g);
-  ledcWrite(LED_B_PIN, b);
-}
-
-void updateBatLed() {
-    float bat = hover.getBattery(); // assume 0–100 %
-
-    bat = clampf(bat, 0.0f, 100.0f);
-
-    RGB color;
-
-    if (bat < 25.0f) {
-        // Red → Orange
-        float t = bat / 25.0f;
-        color.r = 255;
-        color.g = lerp(0, 165, t);
-        color.b = 0;
-
-    } else if (bat < 50.0f) {
-        // Orange → Yellow
-        float t = (bat - 25.0f) / 25.0f;
-        color.r = 255;
-        color.g = lerp(165, 255, t);
-        color.b = 0;
-
-    } else if (bat < 75.0f) {
-        // Yellow → Green (lighter green transition)
-        float t = (bat - 50.0f) / 25.0f;
-        color.r = lerp(255, 0, t);
-        color.g = 255;
-        color.b = 0;
-
-    } else {
-        // Full Green
-        color.r = 0;
-        color.g = 255;
-        color.b = 0;
+void onObstacleStop() {
+   
+    return;
+    if(canMoveForward)
+    {
+      canMoveForward = false;
     }
 
-    setRGB(color.r, color.g, color.b);
+    if(hover.isDirection(FORWARD)) hover.stopMotion();
+}
+
+void onObstacleClear() {
+    canMoveForward = true;
 }
 
 
@@ -82,6 +49,9 @@ void handleSerialInput(String cmd) {
     if (cmd.length() == 0) return;
 
     cmd.toLowerCase();
+
+
+    // IMU commands
 
     if (cmd == "cc") {
       if(startIMU) imu.calibrateCompass(true);
@@ -96,6 +66,8 @@ void handleSerialInput(String cmd) {
         ble.send("Zero heading set! Current direction is now 0°.");
       }
     }
+
+    // hover switch commands
 
     else if(cmd == "on")
     {
@@ -112,10 +84,17 @@ void handleSerialInput(String cmd) {
       ESP.restart();
     }
 
-    else if(cmd == "resethover")
+    else if(cmd == "rh")
     {
       hover.reset();
     }
+
+    else if(cmd == "rp")
+    {
+      hover.resetPose();
+    }
+
+    // movement commands
 
     else if (cmd.startsWith("move"))
     {
@@ -130,16 +109,85 @@ void handleSerialInput(String cmd) {
       hover.rot(val);
     }
 
+    else if (cmd.startsWith("path:"))
+    {
+        String data = cmd.substring(5);
+
+        PathCommand cmds[20];
+
+        int cmdCount = 0;
+
+        while (data.length() > 0 && cmdCount < 20)
+        {
+            int sep = data.indexOf(';');
+
+            String token;
+
+            if (sep >= 0)
+            {
+                token = data.substring(0, sep);
+                data = data.substring(sep + 1);
+            }
+            else
+            {
+                token = data;
+                data = "";
+            }
+
+            int comma = token.indexOf(',');
+
+            if (comma < 0) continue;
+
+            String typeStr = token.substring(0, comma);
+
+            float value =
+                token.substring(comma + 1).toFloat();
+
+            if (typeStr == "m")
+            {
+                cmds[cmdCount++] =
+                {
+                    PATH_MOVE,
+                    value
+                };
+            }
+            else if (typeStr == "r")
+            {
+                cmds[cmdCount++] =
+                {
+                    PATH_ROTATE,
+                    value
+                };
+            }
+        }
+
+        hover.startPath(cmds, cmdCount);
+    }
+
+    // paramater setting commands
+
     else if(cmd.startsWith("kp"))
     {
       float val = cmd.substring(2).toFloat();
       hover.setKP(val);
     }
 
+    else if(cmd.startsWith("ky"))
+    {
+      float val = cmd.substring(2).toFloat();
+      hover.setKYaw(val);
+    }
+
     else if(cmd.startsWith("lb"))
     {
       float val = cmd.substring(2).toFloat();
       hover.setLeftBrakingFactor(val);
+    }
+
+    else if(cmd.startsWith("bd"))
+    {
+      float val = cmd.substring(2).toFloat();
+      hover.setBrakeDistance(val);
     }
 
     // ---- CHANGE MODES ----
@@ -270,9 +318,12 @@ void handleSerialInput(String cmd) {
 
   // ---- MOVEMENT COMMANDS ----
   else if (cmd == "f") {
-      hover.setDirection(FORWARD);
-      hover.setIdle();
-      // ble.send("for");
+      if(canMoveForward)
+      {
+        hover.setDirection(FORWARD);
+        hover.setIdle();
+        // ble.send("for");
+      }
   }
   else if (cmd == "b") {
       hover.setDirection(BACKWARD);
@@ -293,6 +344,7 @@ void handleSerialInput(String cmd) {
       hover.setDirection(STOP);
       hover.setIdle();
       hover.stopMotion();
+      hover.stopPath();
       // ble.send("stop");
   }
   else {
@@ -311,6 +363,8 @@ void setup() {
     Serial2.begin(19200, SERIAL_8N1, RX2_PIN, TX2_UNUSED);
 
     hover.loadCalibration();
+
+    // obstacleDetection_init(onObstacleStop,onObstacleClear);
 
     neopixelWrite(RGB_BUILTIN, RGB_BRIGHTNESS, 0, 0);  // Red
     
@@ -339,13 +393,7 @@ void setup() {
 
     }
 
-    ledcAttach(LED_R_PIN, PWM_FREQ, PWM_RESOLUTION);
-    ledcAttach(LED_G_PIN, PWM_FREQ, PWM_RESOLUTION);
-    ledcAttach(LED_B_PIN, PWM_FREQ, PWM_RESOLUTION);
-
-
     batSendLast = millis() - batSendInterval;
-
 
     neopixelWrite(RGB_BUILTIN, 0, RGB_BRIGHTNESS, 0);  // Green
 
@@ -353,13 +401,18 @@ void setup() {
 
 void loop() {
 
+    // update IMU
     if(startIMU)
     {
       imu.update();
     }
 
+
+    // update hover
     hover.update();
 
+
+    // update battery
     unsigned long now = millis();
 
     if(now - batSendLast >= batSendInterval)
@@ -368,11 +421,13 @@ void loop() {
       
       if(batVoltage > 0)
       {
-        updateBatLed();
         ble.send("Bat: "+String(batVoltage)+"V");
         batSendLast = now;
       }
       
     }
+
+
+    // obstacleDetection_update();
 
 }

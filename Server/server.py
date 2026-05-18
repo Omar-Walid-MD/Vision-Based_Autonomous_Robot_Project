@@ -3,16 +3,18 @@ import socketio
 from aiohttp import web
 import threading
 import os
-import subprocess
 from colorama import Fore, Back, Style
 import json
 import signal
 import sys
 import time
+from server_state import connected_clients, map_data, nodes, robot_components
+from RemoteClientHandler import RemoteClientHandler
 from dotenv import load_dotenv
 load_dotenv()
 env = os.environ.copy()
 platform = os.getenv("PLATFORM")
+
 
 
 # SERVER SETUP
@@ -34,11 +36,12 @@ if platform == "WINDOWS":
 else:
     signal.signal(signal.SIGHUP, handle_exit)   # Close window
 
-
-nodes = ["simulation","camera","controller-serial","voice","pins"]
-
 nodes_status = {}
-logs = []
+
+MAP_PATH = os.getenv("MAP_PATH")
+
+with open(MAP_PATH, "r") as f:
+    map_data = json.load(f)
 
 # SERVER EVENTS
 @sio.event
@@ -48,34 +51,51 @@ async def connect(sid, environ):
 
 @sio.event
 async def disconnect(sid):
+    print("a node disconnected")
     node = get_node(sid)
     if node is not None:
         del nodes_status[node]  
-        print_log(f"Module '{node}' disconnected ({sid})")
+        print(f"Module '{node}' disconnected ({sid})")
 
 @sio.event
 async def connect_node(sid, node):
-    print_log(f"Module '{node}' connected ({sid})")
+    print(f"Module '{node}' connected ({sid})")
     nodes_status[node] = sid
     
 @sio.event
 async def join_topic(sid, topic):
     await sio.enter_room(sid=sid,room=topic)
-    print_log(f"({sid}) Subscribed to topic: {topic}")
+    print(f"({sid}) Subscribed to topic: {topic}")
 
 @sio.event
 async def send_data(sid, data):
     topic, payload = data
-    print_log(f"Sending data ({payload}) to room: ({topic})")
+    print(f"Sending data ({payload}) to room: ({topic})")
     await sio.emit("get_data",[topic,payload],to=topic)
 
 @sio.event
 async def start_shutdown(sid):
     await sio.emit("shutdown")
-    print_log("shutting down")
+    print("shutting down")
     if platform == "RPI":
         await asyncio.sleep(2)
         os.system("sudo shutdown -h now")
+
+
+# REMOTE EVENT HANDLER
+# remoteClientHandler = RemoteClientHandler(sio)
+
+# async def status_broadcaster():
+#     while True:
+#         await remoteClientHandler.broadcast_status()
+#         await asyncio.sleep(2)
+        
+# async def on_startup(app):
+#     app["broadcast_task"] = asyncio.create_task(
+#         status_broadcaster()
+#     )
+# app.on_startup.append(on_startup)
+
 
 # FUNCTIONS
 
@@ -90,25 +110,17 @@ def start():
         
         
 def print_status():
-    clear_terminal()
+    # clear_terminal()
     for node in nodes:
         sid = nodes_status.get(node,None)
         print(f"{Fore.GREEN if sid else Fore.RED}{node} {': '+sid if sid else ''}{Style.RESET_ALL}")
-    if len(logs) > 0:
-        print("=====================")
-        for log in logs:
-            print(log)
+    
             
             
     timer = threading.Timer(1,print_status)
     timer.daemon = True
     timer.start()
 
-def print_log(log):
-    global logs
-    logs.append(log)
-    if len(logs) > 5:
-        logs = logs[1:]
 
 def clear_terminal():
     if os.name == 'nt':  # For Windows

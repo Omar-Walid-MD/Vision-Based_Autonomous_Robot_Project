@@ -5,3 +5,5 @@ int BACKWARD[2] = {-1,1};
 int LEFT[2] = {-1, -1};
 int RIGHT[2] = {1,1};
 int STOP[2] = {0,0};
+
+bool startIMU = false;
