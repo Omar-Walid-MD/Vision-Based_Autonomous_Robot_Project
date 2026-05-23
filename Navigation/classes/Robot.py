@@ -173,8 +173,12 @@ class Robot(NodePath):
         self.point_index += 1
         
     def simulate_battery(self):
-        bat = self.status.batteryLevel
-        self.status.batteryLevel = max(0, bat - globalClock.getDt())
+        if self.status.recharging:
+            self.status.batteryLevel = min(100, bat + globalClock.getDt())
+
+        else:
+            bat = self.status.batteryLevel
+            self.status.batteryLevel = max(0, bat - globalClock.getDt())
         
         
     def stop(self):

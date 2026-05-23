@@ -11,11 +11,13 @@ esp -> pi:
     - transform: [x,y,r]
     - battery_level: bat_percent_float
     - nav_status: status = (idle, navigating, success, failed)
+    - recharging: boolean
 """
 
 MSG_TRANSFORM = 0x01
 MSG_BATTERY   = 0x02
 MSG_NAV       = 0x03
+MSG_RECHARGING = 0x04
 
 MSG_STOP = "stop"
 
@@ -81,9 +83,22 @@ class ESPSerial:
                 self.status.navStatus = navStatus
                 self.robot.node.send("navigation/status",navStatus)
                 print(f"Nav status: {navStatus}")
+                
+            # RECHARGING STATUS
+            elif msg_type == MSG_RECHARGING:
+                data = self.serial.read(1)
+                if len(data) < 1:
+                    return
+
+                recharging = struct.unpack('?', data)
+                self.status.recharging = recharging
+
+                self.robot.node.send("recharging/status",recharging)
+                print(f"Recharging set to: {recharging}")
 
             else:
                 print("Unknown message type:", msg_type)
+                
 
 
     

@@ -6,6 +6,7 @@ class RobotStatus:
         self.batteryLevel = 100
         self.navStatus = NavStatus.IDLE
         self.transform = [0,0,0]
+        self.recharging = False
         
         
         

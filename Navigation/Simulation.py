@@ -140,7 +140,8 @@ class Simulation(ShowBase):
 
         self.pos_label.setText(
             f"World: ({world_pos.x:.2f}, {world_pos.y:.2f}, {world_pos.z:.2f})\n"
-            f"Grid: ({grid_pos[0]}, {grid_pos[1]})"
+            f"Grid: ({grid_pos[0]}, {grid_pos[1]})\n"
+            f"Battery level: {int(self.robot.status.batteryLevel)}%"
         )
 
         return task.cont
