@@ -42,6 +42,10 @@ MLX90614 = None
 MAX30102 = None
 CharLCD = None
 
+# ----------------- Setup -----------------
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from Server.Node import Node
+
 
 # ----------------------------- Configuration ----------------------------- #
 
@@ -356,96 +360,98 @@ class ScreenController:
 # ------------------------------- Node ------------------------------------ #
 
 class PeripheralsNode:
-    """Socket.IO peripherals node."""
+    """Peripherals node using unified Node topic system."""
 
     def __init__(self, server_url: str, mock: bool = False):
         self.config = PeripheralsConfig()
         self.server_url = server_url
         self.mock = mock
 
+        # Hardware controllers
         self.servo_driver = ServoDriver(self.config, mock=mock)
         self.arm = ArmController(self.servo_driver, self.config)
         self.head = HeadController(self.servo_driver, self.config)
         self.vitals = VitalSensorsReader(self.config, mock=mock)
         self.screen = ScreenController(self.config, mock=mock)
 
-        self.sio = None
-        if socketio is not None:
-            self.sio = socketio.Client(reconnection=True)
-            self.register_socket_events()
-        else:
-            logging.warning("python-socketio is not installed. Running without server communication.")
+        # Use your unified Node
+        self.node = Node("peripherals_node", url=server_url)
 
-    def register_socket_events(self) -> None:
-        assert self.sio is not None
+        # Register subscriptions
+        self.register_topics()
 
-        @self.sio.event
-        def connect():
-            logging.info("Connected to server: %s", self.server_url)
-            self.publish("node/status", {"node": "peripherals_node", "status": "online"})
-            self.screen.write_text("Robot Ready")
+    # ---------------------------
+    # Topic Registration
+    # ---------------------------
+    def register_topics(self):
 
-        @self.sio.event
-        def disconnect():
-            logging.warning("Disconnected from server")
+        self.node.subscribe("peripherals/arm/set_angles", self.on_arm_set_angles)
+        self.node.subscribe("peripherals/arm/home", self.on_arm_home)
+        self.node.subscribe("peripherals/arm/checkup_position", self.on_arm_checkup)
 
-        @self.sio.on("peripherals/arm/set_angles")
-        def on_arm_set_angles(data):
-            angles = data.get("angles", [])
-            result = self.arm.set_angles(angles)
-            self.publish("peripherals/arm/state", {"armAngles": result})
+        self.node.subscribe("peripherals/head/set", self.on_head_set)
+        self.node.subscribe("peripherals/head/center", self.on_head_center)
 
-        @self.sio.on("peripherals/arm/home")
-        def on_arm_home(data=None):
-            result = self.arm.home()
-            self.publish("peripherals/arm/state", {"armAngles": result})
+        self.node.subscribe("peripherals/screen/write", self.on_screen_write)
 
-        @self.sio.on("peripherals/arm/checkup_position")
-        def on_arm_checkup(data=None):
-            result = self.arm.checkup_position()
-            self.publish("peripherals/arm/state", {"armAngles": result})
+        self.node.subscribe("peripherals/vitals/read", self.on_vitals_read)
 
-        @self.sio.on("peripherals/head/set")
-        def on_head_set(data):
-            pan = data.get("pan", self.head.head_angles[0])
-            tilt = data.get("tilt", self.head.head_angles[1])
-            result = self.head.set_angles(pan, tilt)
-            self.publish("peripherals/head/state", {"headAngles": result})
+    # ---------------------------
+    # Handlers
+    # ---------------------------
+    def on_arm_set_angles(self, data):
+        angles = data.get("angles", [])
+        result = self.arm.set_angles(angles)
+        self.publish("peripherals/arm/state", {"armAngles": result})
 
-        @self.sio.on("peripherals/head/center")
-        def on_head_center(data=None):
-            result = self.head.center()
-            self.publish("peripherals/head/state", {"headAngles": result})
+    def on_arm_home(self, data=None):
+        result = self.arm.home()
+        self.publish("peripherals/arm/state", {"armAngles": result})
 
-        @self.sio.on("peripherals/screen/write")
-        def on_screen_write(data):
-            text = str(data.get("text", ""))
-            current = self.screen.write_text(text)
-            self.publish("peripherals/screen/state", {"currentText": current})
+    def on_arm_checkup(self, data=None):
+        result = self.arm.checkup_position()
+        self.publish("peripherals/arm/state", {"armAngles": result})
 
-        @self.sio.on("peripherals/vitals/read")
-        def on_vitals_read(data=None):
-            self.publish("peripherals/vitals", self.vitals.read_all())
+    def on_head_set(self, data):
+        pan = data.get("pan", self.head.head_angles[0])
+        tilt = data.get("tilt", self.head.head_angles[1])
+        result = self.head.set_angles(pan, tilt)
+        self.publish("peripherals/head/state", {"headAngles": result})
 
-    def publish(self, topic: str, data: Dict) -> None:
-        """Publish topic-style messages to the central server."""
+    def on_head_center(self, data=None):
+        result = self.head.center()
+        self.publish("peripherals/head/state", {"headAngles": result})
+
+    def on_screen_write(self, data):
+        text = str(data.get("text", ""))
+        current = self.screen.write_text(text)
+        self.publish("peripherals/screen/state", {"currentText": current})
+
+    def on_vitals_read(self, data=None):
+        self.publish("peripherals/vitals", self.vitals.read_all())
+        
+    # ---------------------------
+    # Publish Wrapper
+    # ---------------------------
+    def publish(self, topic: str, data: Dict):
         logging.info("PUB %s: %s", topic, data)
-        if self.sio is not None and self.sio.connected:
-            # Match the presentation idea: topic-based messaging through central hub.
-            self.sio.emit("publish", {"topic": topic, "data": data})
+        self.node.send(topic, data)
 
-    def connect(self) -> None:
-        if self.sio is not None:
-            self.sio.connect(self.server_url, wait_timeout=5)
-
-    def loop(self) -> None:
+    # ---------------------------
+    # Main Loop
+    # ---------------------------
+    def loop(self):
         self.screen.write_text("Peripherals ON")
         next_publish = 0.0
+
         while True:
             now = time.time()
+
             if now >= next_publish:
                 data = self.vitals.read_all()
+
                 self.publish("peripherals/vitals", data)
+
                 self.publish("peripherals/state", {
                     "armAngles": self.arm.arm_angles,
                     "headAngles": self.head.head_angles,
@@ -454,15 +460,18 @@ class PeripheralsNode:
                     "oxySaturation": self.vitals.oxy_saturation,
                     "currentText": self.screen.current_text,
                 })
+
                 next_publish = now + self.config.publish_interval_sec
+
             time.sleep(0.05)
 
-    def shutdown(self) -> None:
+    # ---------------------------
+    # Shutdown
+    # ---------------------------
+    def shutdown(self):
         self.screen.clear()
         self.servo_driver.shutdown()
-        if self.sio is not None and self.sio.connected:
-            self.publish("node/status", {"node": "peripherals_node", "status": "offline"})
-            self.sio.disconnect()
+        self.publish("node/status", {"node": "peripherals_node", "status": "offline"})
 
 
 def parse_args() -> argparse.Namespace:

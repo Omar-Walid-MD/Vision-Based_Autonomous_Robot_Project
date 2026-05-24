@@ -8,12 +8,6 @@
 #include <signal.h>
 
 //~ #include "Node.h"
-#include <nlohmann/json.hpp>
-#include <gst/app/gstappsink.h>
-#include <gst/app/gstappsrc.h>
-#include <signal.h>
-
-//~ #include "Node.h"
 
 extern "C" {
 #include <apriltag/apriltag.h>
@@ -25,13 +19,11 @@ extern "C" {
 
 
 
-
-
 using namespace cv;
 using namespace std;
 
 // compilation command without node:
-// g++ main.cpp -o apriltag `pkg-config --cflags --libs opencv4 gstreamer-1.0 gstreamer-app-1.0` -lapriltag -lpthread -std=c++17 -Wall
+// g++ main.cpp -o main `pkg-config --cflags --libs opencv4 gstreamer-1.0 gstreamer-app-1.0` -lapriltag -lpthread -std=c++17 -Wall
     
 // compilation command with node
 // g++ main.cpp Node.cpp -o main \
@@ -77,31 +69,6 @@ GstElement *global_input_pipe = nullptr;
 GstElement *global_output_pipe = nullptr;
 
 
-void handle_sigint(int)
-{
-    std::cout << "\nStopping...\n";
-
-    if (global_input_pipe)
-    {
-        gst_element_set_state(global_input_pipe, GST_STATE_NULL);
-        gst_object_unref(global_input_pipe);
-    }
-
-    if (global_output_pipe)
-    {
-        gst_element_set_state(global_output_pipe, GST_STATE_NULL);
-        gst_object_unref(global_output_pipe);
-    }
-
-    system("rm -f /tmp/camera_stream*");
-
-    exit(0);
-}
-
-
-GstElement *global_input_pipe = nullptr;
-GstElement *global_output_pipe = nullptr;
-
 
 void handle_sigint(int)
 {
@@ -129,28 +96,30 @@ int main(int argc, char* argv[]) {
     
     // Parse command-line argument for --show or -s
     bool show = false;
-    double detect_scale = 0.25;
-    double detect_scale = 0.25;
+    bool enable_output = false;
+
+    // Fixed output resolution sent to facehand.py via shared memory
+    const int INPUT_WIDTH = 1280;
+    const int INPUT_HEIGHT = 720;
+    
+    const int OUTPUT_WIDTH  = 640;
+    const int OUTPUT_HEIGHT = 360;
+
+    double scale_up_x = INPUT_WIDTH * 1.0 / OUTPUT_WIDTH;
+    double scale_up_y = INPUT_HEIGHT * 1.0 / OUTPUT_HEIGHT;
 
     
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
 
-        if (arg == "--scale" || arg == "-scale") {
-            if (i + 1 < argc) {
-                detect_scale = std::atof(argv[++i]);
-                if (detect_scale <= 0.0 || detect_scale > 1.0) {
-                    std::cerr << "Invalid scale value. Using default 0.5\n";
-                    detect_scale = 0.25;
-                    detect_scale = 0.25;
-                }
-            }
-        }
-        else if (arg == "--no-show" || arg == "--headless") {
+        if (arg == "--no-show" || arg == "--headless") {
             show = false;
         }
         else if (arg == "--show" || arg == "-s") {
             show = true;
+        }
+        else if (arg == "--output" || arg == "-o") {
+            enable_output = true;
         }
     }
 
@@ -160,37 +129,29 @@ int main(int argc, char* argv[]) {
         std::cout << "Display disabled (run with --show or -s to enable)\n";
     }
 
-    // GStreamer pipeline (high-res mode + hardware conversion)
-    // You can change resolution/framerate here
-    //~ std::string pipeline = "libcamerasrc ! "
-                           //~ "video/x-raw,width=2304,height=1296,framerate=50/1 ! "
-                           //~ "v4l2convert ! "
-                           //~ "video/x-raw,format=BGR ! "
-                           //~ "appsink";
-                           
-    //~ std::string pipeline = "libcamerasrc ! "
-       //~ "video/x-raw,width=2304,height=1296,framerate=50/1 ! "
-       //~ "v4l2convert ! "
-       //~ "video/x-raw,format=YV12 ! "
-       //~ "appsink";
-       
-       
     gst_init(&argc, &argv);
     
     signal(SIGINT, handle_sigint);
     
-       
-    std::string input_pipeline = "libcamerasrc ! queue max-size-buffers=1 leaky=downstream ! "
-    "video/x-raw,width=2304,height=1296,framerate=30/1 ! "
+    std::string input_pipeline =
+    "libcamerasrc ! "
+    "video/x-raw,width=" + std::to_string(INPUT_WIDTH) + ",height=" + std::to_string(INPUT_HEIGHT) + ",framerate=15/1 ! "
+    "queue max-size-buffers=1 leaky=downstream ! "
     "v4l2convert ! "
-    "video/x-raw,format=YV12 ! "
+    "video/x-raw,format=BGR ! "
     "appsink name=camera_sink drop=true max-buffers=1 sync=false";
     
+
+    // Output pipeline: fixed resolution 640x360 BGR to match facehand.py expectations
     std::string output_pipeline =
     "appsrc name=python_src is-live=true block=false format=time ! "
-    "video/x-raw,format=BGR,width=640,height=360,framerate=30/1 ! "
+    "video/x-raw,format=BGR,width=" + std::to_string(OUTPUT_WIDTH) +
+    ",height=" + std::to_string(OUTPUT_HEIGHT) + ",framerate=15/1 ! "
     "queue leaky=2 max-size-buffers=2 ! "
     "shmsink socket-path=/tmp/camera_stream sync=false wait-for-connection=false";
+
+
+    
     
     GError *err = nullptr;
 
@@ -200,47 +161,45 @@ int main(int argc, char* argv[]) {
                   << (err ? err->message : "unknown") << std::endl;
         return -1;
     }
-
-    GstElement *output_pipe = gst_parse_launch(output_pipeline.c_str(), &err);
-    if (!output_pipe) {
-        std::cerr << "Failed to create output pipeline: "
-                  << (err ? err->message : "unknown") << std::endl;
-        return -1;
+    
+    GstElement *output_pipe;
+    if(enable_output)
+    {
+        output_pipe = gst_parse_launch(output_pipeline.c_str(), &err);
+        if (!output_pipe) {
+            std::cerr << "Failed to create output pipeline: "
+                      << (err ? err->message : "unknown") << std::endl;
+            return -1;
+        }
     }
 
+    
+
     GstElement *appsink = gst_bin_get_by_name(GST_BIN(input_pipe), "camera_sink");
-    GstElement *appsrc  = gst_bin_get_by_name(GST_BIN(output_pipe), "python_src");
+    
+    GstElement *appsrc;
+    if(enable_output)
+    {
+        appsrc  = gst_bin_get_by_name(GST_BIN(output_pipe), "python_src");
+        if (!appsrc) {
+            std::cerr << "Could not find python_src\n";
+            return -1;
+        }
+    }
+    
 
     if (!appsink) {
         std::cerr << "Could not find camera_sink\n";
         return -1;
     }
 
-    if (!appsrc) {
-        std::cerr << "Could not find python_src\n";
-        return -1;
-    }
+    
 
     gst_element_set_state(input_pipe, GST_STATE_PLAYING);
-    gst_element_set_state(output_pipe, GST_STATE_PLAYING);
+    if(enable_output) gst_element_set_state(output_pipe, GST_STATE_PLAYING);
     
     global_input_pipe = input_pipe;
-    global_output_pipe = output_pipe;
-                           
-
-
-    //~ std::cout << "Opening pipeline...\n";
-
-    //~ cv::VideoCapture cap(pipeline, cv::CAP_GSTREAMER);
-
-    //~ std::cout << "After constructor\n";
-
-    //~ if (!cap.isOpened()) {
-        //~ std::cerr << "Cannot open camera\n";
-        //~ return -1;
-    //~ }
-
-    //~ std::cout << "Opened successfully\n";
+    if(enable_output) global_output_pipe = output_pipe;
 
     apriltag_family_t *tf = tag36h11_create();
     apriltag_detector_t *td = apriltag_detector_create();
@@ -265,9 +224,6 @@ int main(int argc, char* argv[]) {
     double cy = cameraMatrix.at<double>(1,2);
 
     double tag_size = 0.095; // meters
-
-    //~ SocketNode my_node("camera");
-    SocketNode my_node("camera");
     
     if(show)
     {
@@ -275,66 +231,43 @@ int main(int argc, char* argv[]) {
         cv::resizeWindow("AprilTag Detection", 720, 405); 
     }
 
-    
-    // Inside the detection loop, after getting 'det'
-
-    //~ cv::Mat frame;
-    //~ cv::Mat frame;
-
     // FPS measurement
     int frame_count = 0;
     auto start_time = std::chrono::steady_clock::now();
-
+    
     while (true) {
-        auto loop_start = std::chrono::steady_clock::now();
 
-        //~ cap >> frame;
-        //~ if (frame.empty()) {
-            //~ std::cerr << "Blank frame grabbed\n";
-            //~ break;
-        //~ }
+        GstSample *sample = gst_app_sink_try_pull_sample(GST_APP_SINK(appsink), 0);
         
-        GstSample *sample = gst_app_sink_pull_sample(GST_APP_SINK(appsink));
+        if (!sample) continue;
 
         GstBuffer *buffer = gst_sample_get_buffer(sample);
         GstMapInfo map;
         gst_buffer_map(buffer, &map, GST_MAP_READ);
 
-        cv::Mat frame(1296, 2304, CV_8UC1, (void*)map.data);
-        //~ cap >> frame;
-        //~ if (frame.empty()) {
-            //~ std::cerr << "Blank frame grabbed\n";
-            //~ break;
-        //~ }
-        
-        GstSample *sample = gst_app_sink_pull_sample(GST_APP_SINK(appsink));
+    
+        // =============================================
+        // BGR INPUT FRAME (from camera)
+        // =============================================
+        cv::Mat frame(INPUT_WIDTH, INPUT_HEIGHT, CV_8UC3, (void*)map.data);
 
-        GstBuffer *buffer = gst_sample_get_buffer(sample);
-        GstMapInfo map;
-        gst_buffer_map(buffer, &map, GST_MAP_READ);
+        //~ // Resize ONCE to output resolution
+        cv::Mat resized;
+        cv::resize(frame, resized, cv::Size(OUTPUT_WIDTH, OUTPUT_HEIGHT), 0, 0, cv::INTER_LINEAR);
 
-        cv::Mat frame(1296, 2304, CV_8UC1, (void*)map.data);
-
+        //~ // =============================================
+        //~ // GRAYSCALE CONVERSION BLOCK (EDITABLE LATER)
+        //~ // =============================================
+        cv::Mat gray;
+        cv::cvtColor(resized, gray, cv::COLOR_BGR2GRAY);
         
-
-        
-        // Method 1: convert to gray (39 FPS)
-        //~ cv::Mat gray;
-        //~ cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
-        
-        int y_height = frame.rows * 2 / 3;  // For YUV420 formats, Y is exactly 2/3 of total buffer height
-        cv::Mat gray(frame, cv::Rect(0, 0, frame.cols, y_height));
-        
-        double scale_up_x = 1.0 / detect_scale;  // = 4.0 if detect_scale = 0.25
-        double scale_up_y = 1.0 / detect_scale;  // usually same, unless non-uniform resize
-
-        cv::resize(gray, gray, cv::Size(), detect_scale, detect_scale, cv::INTER_NEAREST);  // fastest
-        
-         
         if (!gray.isContinuous()) {
             gray = gray.clone();
         }
-        
+
+        //~ // ===================================================
+        //~ // AprilTag detection on grayscale (Y plane)
+        //~ // ===================================================
         image_u8_t im = {
             .width = gray.cols,
             .height = gray.rows,
@@ -349,7 +282,6 @@ int main(int argc, char* argv[]) {
             apriltag_detection_t *det;
             zarray_get(detections, i, &det);
 
-            // ================= Pose Estimation =================
             apriltag_detection_info_t info;
             info.det = det;
             info.tagsize = tag_size;
@@ -358,9 +290,8 @@ int main(int argc, char* argv[]) {
             info.cx = cx;
             info.cy = cy;
 
-            // IMPORTANT: scale corners back to original image coordinates
-            // (pose estimation needs original pixel coords, not scaled!)
-            apriltag_detection_t scaled_det = *det;  // copy detection
+            // Scale corners back to original image coordinates for pose estimation
+            apriltag_detection_t scaled_det = *det;
             for (int j = 0; j < 4; j++) {
                 scaled_det.p[j][0] *= scale_up_x;
                 scaled_det.p[j][1] *= scale_up_y;
@@ -368,7 +299,6 @@ int main(int argc, char* argv[]) {
             scaled_det.c[0] *= scale_up_x;
             scaled_det.c[1] *= scale_up_y;
 
-            // Use scaled detection for pose
             info.det = &scaled_det;
             apriltag_pose_t pose;
             estimate_tag_pose(&info, &pose);
@@ -376,13 +306,11 @@ int main(int argc, char* argv[]) {
             Mat R(3,3,CV_64F, pose.R->data);
             Mat t(3,1,CV_64F, pose.t->data);
 
-            // Euler Angles (unchanged)
             Vec3d euler = rotationMatrixToEulerAngles(R);
             double pitch = euler[0];
             double yaw   = euler[1];
             double roll  = euler[2];
 
-            // Normalize yaw
             yaw = fmod((yaw + 180.0), 360.0);
             if (yaw < 0) yaw += 360.0;
             yaw -= 180.0;
@@ -393,31 +321,8 @@ int main(int argc, char* argv[]) {
             cout << "Roll: " << roll << " Pitch: " << pitch << " Yaw: " << yaw << endl;
             cout << "------------------------" << endl;
             
-            // Build JSON object
-            //~ nlohmann::json j;
-            
-            //~ j["id"] = det->id;
-            //~ j["pose"] = {
-                //~ {"position", {t.at<double>(0), t.at<double>(1), t.at<double>(2)}},
-                //~ {"rotation", {roll, pitch, yaw}}
-            //~ };
-            
-            //~ my_node.send("apriltag_detected", j.dump());
-            
-            // Build JSON object
-            nlohmann::json j;
-            
-            j["id"] = det->id;
-            j["pose"] = {
-                {"position", {t.at<double>(0), t.at<double>(1), t.at<double>(2)}},
-                {"rotation", {roll, pitch, yaw}}
-            };
-            
-            my_node.send("apriltag_detected", j.dump());
-
             if (show)
             {
-                // ================= Draw Border =================
                 for (int j = 0; j < 4; j++)
                 {
                     Point p1(
@@ -428,10 +333,9 @@ int main(int argc, char* argv[]) {
                         static_cast<int>(det->p[(j+1)%4][0] * scale_up_x),
                         static_cast<int>(det->p[(j+1)%4][1] * scale_up_y)
                     );
-                    line(frame, p1, p2, Scalar(0,255,0), 2);
+                    line(resized, p1, p2, Scalar(200), 2);
                 }
 
-                // ================= Draw Axis =================
                 vector<Point3f> axis = {
                     Point3f(0,0,0),
                     Point3f(0.1,0,0),
@@ -441,70 +345,54 @@ int main(int argc, char* argv[]) {
                 vector<Point2f> imgpts;
                 Mat rvec;
                 Rodrigues(R, rvec);
-                projectPoints(axis, rvec, t,
-                              cameraMatrix, distCoeffs, imgpts);
+                projectPoints(axis, rvec, t, cameraMatrix, distCoeffs, imgpts);
 
-                // Scale axis points back to original image size
                 for (auto& pt : imgpts) {
                     pt.x *= scale_up_x;
                     pt.y *= scale_up_y;
                 }
 
-                line(frame, imgpts[0], imgpts[1], Scalar(0,0,255), 3);
-                line(frame, imgpts[0], imgpts[2], Scalar(0,255,0), 3);
-                line(frame, imgpts[0], imgpts[3], Scalar(255,0,0), 3);
+                line(resized, imgpts[0], imgpts[1], Scalar(50),  3);
+                line(resized, imgpts[0], imgpts[2], Scalar(150), 3);
+                line(resized, imgpts[0], imgpts[3], Scalar(220), 3);
 
-                // ================= Display Values =================
-                putText(frame, "Dist: " + to_string(distance) + " m",
+                putText(resized, "Dist: " + to_string(distance) + " m",
                         Point(20,40), FONT_HERSHEY_SIMPLEX,
-                        0.7, Scalar(255,255,255), 2);
-                putText(frame, "Roll: " + to_string(roll),
-                        Point(20,80), FONT_HERSHEY_SIMPLEX,
-                        0.7, Scalar(0,255,0), 2);
-                putText(frame, "Pitch: " + to_string(pitch),
-                        Point(20,120), FONT_HERSHEY_SIMPLEX,
-                        0.7, Scalar(255,0,0), 2);
-                putText(frame, "Yaw: " + to_string(yaw),
-                        Point(20,160), FONT_HERSHEY_SIMPLEX,
-                        0.7, Scalar(0,0,255), 2);
+                        0.7, Scalar(255), 2);
+                putText(resized, "Roll: "  + to_string(roll),
+                        Point(20,80),  FONT_HERSHEY_SIMPLEX, 0.7, Scalar(200), 2);
+                putText(resized, "Pitch: " + to_string(pitch),
+                        Point(20,120), FONT_HERSHEY_SIMPLEX, 0.7, Scalar(200), 2);
+                putText(resized, "Yaw: "   + to_string(yaw),
+                        Point(20,160), FONT_HERSHEY_SIMPLEX, 0.7, Scalar(200), 2);
             }
         }
-        
-       
-       GstBuffer *out_buffer = gst_buffer_new_allocate(nullptr, map.size, nullptr);
-       GstMapInfo out_map;
-       gst_buffer_map(out_buffer, &out_map, GST_MAP_WRITE);
-       memcpy(out_map.data, map.data, map.size);
-       
-       gst_buffer_unmap(out_buffer, &out_map);
-       gst_app_src_push_buffer(GST_APP_SRC(appsrc), out_buffer);
-       gst_buffer_unmap(buffer, &map);
-       gst_sample_unref(sample);
-        
-       
-       GstBuffer *out_buffer = gst_buffer_new_allocate(nullptr, map.size, nullptr);
-       GstMapInfo out_map;
-       gst_buffer_map(out_buffer, &out_map, GST_MAP_WRITE);
-       memcpy(out_map.data, map.data, map.size);
-       
-       gst_buffer_unmap(out_buffer, &out_map);
-       gst_app_src_push_buffer(GST_APP_SRC(appsrc), out_buffer);
-       gst_buffer_unmap(buffer, &map);
-       gst_sample_unref(sample);
-            
 
-    
-        
+        apriltag_detections_destroy(detections);
+
+        if (enable_output)
+        {
+            size_t out_size = resized.total() * resized.elemSize();
+
+            GstBuffer *out_buffer = gst_buffer_new_allocate(nullptr, out_size, nullptr);
+
+            GstMapInfo out_map;
+            gst_buffer_map(out_buffer, &out_map, GST_MAP_WRITE);
+
+            memcpy(out_map.data, resized.data, out_size);
+
+            gst_buffer_unmap(out_buffer, &out_map);
+
+            gst_app_src_push_buffer(GST_APP_SRC(appsrc), out_buffer);
+        }
+
         if (show) {
-            
-            if (frame_count == 0) {  // only on first frame
+            if (frame_count == 0) {
                 cv::resizeWindow("AprilTag Detection", 720, 405);
                 std::cout << "Window resized to 720x405\n";
             }
-            cv::imshow("AprilTag Detection", gray);
+            cv::imshow("AprilTag Detection", resized);
         }
-    
-        
         
         // FPS measurement
         frame_count++;
@@ -512,18 +400,16 @@ int main(int argc, char* argv[]) {
             auto now = std::chrono::steady_clock::now();
             auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
             double fps = (frame_count * 1000.0) / total_duration;
-            std::cout << "Resolution: " << frame.cols << "" << frame.rows
-                      << "q | FPS: " << fps
+            std::cout << "Resolution: " << frame.cols << "x" << frame.rows
+                      << " | FPS: " << fps
                       << " (" << frame_count << " frames / " << total_duration << " ms)\n";
             frame_count = 0;
             start_time = now;
         }
-        
+
         if(show)
         {
-            
-            // Wait only if displaying
-            int key = cv::waitKey(show ? 1 : 1);  // still allow 'q' to quit even if no window
+            int key = cv::waitKey(1);
             if (key == 'q' || key == 27) break;
         }
     }
@@ -531,10 +417,7 @@ int main(int argc, char* argv[]) {
     // Cleanup
     apriltag_detector_destroy(td);
     tag36h11_destroy(tf);
-    //~ cap.release();
-    //~ cap.release();
     if(show) cv::destroyAllWindows();
 
     return 0;
 }
-
