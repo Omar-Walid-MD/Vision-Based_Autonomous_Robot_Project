@@ -2,5 +2,5 @@
 
 echo "Starting compilation"
 
-g++ new-main.cpp -o main `pkg-config --cflags --libs opencv4 gstreamer-1.0 gstreamer-app-1.0` -lapriltag -lpthread -std=c++17 -Wall
+g++ main.cpp -o main `pkg-config --cflags --libs opencv4 gstreamer-1.0 gstreamer-app-1.0` -lapriltag -lpthread -std=c++17 -Wall
 
