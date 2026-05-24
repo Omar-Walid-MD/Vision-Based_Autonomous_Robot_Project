@@ -29,7 +29,7 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-    node = Node("navigation",skip_connection=True)
+    node = Node("navigation")
     
     # node subscriptions go here 
     

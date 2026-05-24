@@ -17,8 +17,9 @@ public:
     void calibrateGyro(bool force = false);
     
     float getYaw();                  
+    float getCurrentYaw();            
     float getMagYaw();
-    float getOffsetMagYaw(float offset);               
+    float getOffsetMagYaw(float offset);
             
     void setZeroHeading();           
     void printCalibration();

@@ -1,8 +1,19 @@
 from panda3d.core import NodePath, Vec3
 from direct.task import Task
 import math
+import os
 from pathfinding import aStarSearch
+from classes.RobotStatus import RobotStatus
+from classes.ESPSerial import ESPSerial
 
+env = os.environ.copy()
+SERIAL_PORT = os.getenv("SERIAL_PORT")
+
+SIM_MOVE_SPEED = 2
+SIM_ROTATE_SPEED = 180
+
+BATTERY_SEND_INTERVAL = 10
+BATTERY_SEND_REMAINING = 0
 
 # Helper functions
 def normalize_vector(vector):
@@ -35,15 +46,22 @@ class Robot(NodePath):
         self.reparentTo(scene.render)
         
         self.setPos(2,2,0)
-        self.setHpr(-90,0,0)
+        self.setHpr(0,0,0)
         
         self.points = []
         self.point_index = 0
         
-        
-        self.move_speed = 2
-        self.rotation_speed = 180
         self.size = robot_size # meters
+        
+        self.status = RobotStatus()
+        
+        self.sim = scene.sim
+        self.node = scene.node
+        
+        self.serial = None
+        if not self.sim:
+            self.serial = ESPSerial(SERIAL_PORT,status=self.status,robot=self)
+            
         
     
     # navigate to given location name
@@ -84,7 +102,26 @@ class Robot(NodePath):
 
         
     def update(self):
+        if self.sim:
+            self.simulate_navigation()
+            self.simulate_battery()
+        else:
+            self.serial.update()    
         
+        self.send_battery_level()
+        
+        
+    def send_battery_level(self):
+        global BATTERY_SEND_REMAINING
+        if BATTERY_SEND_REMAINING <= 0:
+            self.node.send("battery/level",self.status.batteryLevel)
+            BATTERY_SEND_REMAINING = BATTERY_SEND_INTERVAL
+            print("sent battery level")
+        else:
+            BATTERY_SEND_REMAINING -= globalClock.getDt()
+        
+        
+    def simulate_navigation(self):
         # if no points, continue to next iteration
         if self.point_index >= len(self.points) - 1:
             return
@@ -104,8 +141,9 @@ class Robot(NodePath):
             rotation_angle += 360
             
         angle_rad = math.radians(rotation_angle)
+
         if abs(rotation_angle) > 0.1:
-            rotation_step = self.rotation_speed * globalClock.getDt()
+            rotation_step = SIM_ROTATE_SPEED * globalClock.getDt()
             if angle_rad >= 0:
                 rotation_step = min(rotation_step, rotation_angle)
                 self.setH(self.getH() + rotation_step)
@@ -119,7 +157,7 @@ class Robot(NodePath):
         
         distance_to_target = distance_between_points(position, target)
         if distance_to_target > 0.05:
-            move_step = self.move_speed * globalClock.getDt()
+            move_step = SIM_MOVE_SPEED * globalClock.getDt()
             move_step = min(move_step, distance_to_target)
             direction = (target_pos - current_pos).normalized()
             
@@ -133,3 +171,19 @@ class Robot(NodePath):
             return
         
         self.point_index += 1
+        
+    def simulate_battery(self):
+        if self.status.recharging:
+            self.status.batteryLevel = min(100, bat + globalClock.getDt())
+
+        else:
+            bat = self.status.batteryLevel
+            self.status.batteryLevel = max(0, bat - globalClock.getDt())
+        
+        
+    def stop(self):
+        if self.sim:
+            self.point_index = 0
+            self.points = []
+        else:
+            self.serial.sendStop() 

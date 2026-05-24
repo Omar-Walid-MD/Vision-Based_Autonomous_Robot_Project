@@ -14,8 +14,8 @@ if platform == "RPI":
     from picamera2 import Picamera2
 
 # ----------------- Parameters -----------------
-CHECKERBOARD = (9, 6)
-SQUARE_SIZE = 25  # mm
+CHECKERBOARD = (10, 7)
+SQUARE_SIZE = 19  # mm
 
 SAVE_DIR = "calib_images"
 CALIB_FILE_NPZ = "camera_calib.npz"

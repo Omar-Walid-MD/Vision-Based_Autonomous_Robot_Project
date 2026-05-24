@@ -21,6 +21,18 @@ static inline uint8_t lerp(uint8_t a, uint8_t b, float t) {
     return (uint8_t)(a + (b - a) * t);
 }
 
+enum PathCmdType
+{
+    PATH_MOVE,
+    PATH_ROTATE
+};
+
+struct PathCommand
+{
+    PathCmdType type;
+    float value;
+};
+
 
 #ifdef _DEBUG
   #define DEBUG(txt, val) {Serial.print(F(txt)); Serial.print(F(": ")); Serial.print(val);}

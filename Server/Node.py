@@ -20,8 +20,8 @@ class Node:
         # receive and handle data using topic subscription callback
         @self.sio.event
         def get_data(data):
-            print(data)
             topic, payload = data
+
             topicFunction = self.topics.get(topic,None)
             if topicFunction is not None:
                 topicFunction(payload)
@@ -42,8 +42,8 @@ class Node:
         if not skip_connection:       
             tryconnect()
     
-    # send data on topic   
-    def send(self,topic,data):
+    # send data on topic
+    def send(self,topic,data=None):
         if self.connected:
             print(f"Sending data ({data}) to topic: ({topic})")
             self.sio.emit("send_data",[topic,data])
@@ -64,7 +64,3 @@ class Node:
             self.sio.emit(event)
         else:
             print("Node not connected!")
-
-        
-
-    

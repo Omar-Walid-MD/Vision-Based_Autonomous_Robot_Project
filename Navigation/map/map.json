@@ -226,7 +226,7 @@
                 ]
             },
             {
-                "name": "C",
+                "name": "charger",
                 "points": [
                     [
                         300,
@@ -36683,7 +36683,7 @@
                 ]
             },
             {
-                "name": "C",
+                "name": "charger",
                 "vertices_grid": [
                     [
                         60,

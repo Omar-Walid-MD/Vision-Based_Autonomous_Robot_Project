@@ -39,6 +39,8 @@ EXIT_WORD = "thank you"
 VOICE = "mb-en1"
 SPEED = "100"
 
+listenForCommand = False
+
 # ----------------- TTS (Unified) -----------------
 engine = None
 if platform != "RPI":
@@ -64,19 +66,32 @@ rec = KaldiRecognizer(model, 16000)
 # ----------------- Command Handling -----------------
 def handle_command(command_word, argument):
     if command_word == "go":
-        node.send("move_to", argument)
+        node.send("voice/command", {"task":"navigation","location":argument}) # to match simple behaviour tree
         speak(f"going to {argument}")
 
     elif command_word == "stop":
         node.send("stop", True)
         speak("Stopping robot immediately")
 
-    elif command_word == "spin":
-        node.send("start_search", True)
-        speak("spinning right now")
-
     else:
         speak(f"Unknown command: {command_word}")
+        
+
+# ----------------- Handle speech -----------------
+
+def handle_speak(data):
+    text = data["text"]
+    speak(text)
+    
+def handle_command_listen(data):
+    global listenForCommand
+    if data["action"]:
+        listenForCommand = data["action"] == "listen"
+    
+    
+node.subscribe("voice/speak",handle_speak)
+node.subscribe("voice/command",handle_command_listen)
+
 
 # ----------------- Main Loop -----------------
 running = True
@@ -115,13 +130,14 @@ with sd.RawInputStream(
             words = text.split()
 
             # Trigger word logic
-            if words[0] in TRIGGER_WORD_LIST:
-                if len(words) > 1:
-                    command_word = words[1]
-                    argument = " ".join(words[2:] if len(words) > 2 else [])
-                    handle_command(command_word, argument)
-                else:
-                    speak("Yes sir?")
+            if listenForCommand:
+                if words[0] in TRIGGER_WORD_LIST:
+                    if len(words) > 1:
+                        command_word = words[1]
+                        argument = " ".join(words[2:] if len(words) > 2 else [])
+                        handle_command(command_word, argument)
+                    else:
+                        speak("Yes sir?")
 
-            elif TRIGGER_WORD in text:
-                speak(f"Incomplete command. Say: {TRIGGER_WORD} [command] [argument]")
+                elif TRIGGER_WORD in text:
+                    speak(f"Incomplete command. Say: {TRIGGER_WORD} [command] [argument]")

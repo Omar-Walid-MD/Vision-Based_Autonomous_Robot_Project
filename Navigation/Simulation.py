@@ -69,10 +69,6 @@ class Simulation(ShowBase):
         
         robot_position = self.robot.getPos()
         
-        # self.robot.setPos(15.25, -5.75,robot_position.getZ())
-
-        self.robot.navigate_to_location("D")
-        
         
         if self.show:
             base.cam.setPos(robot_position.getX(),robot_position.getY(),20)
@@ -90,6 +86,48 @@ class Simulation(ShowBase):
 
         self.taskMgr.add(self.update,"update")
         
+        def handle_tag_found(data):
+            # data = {
+            #         "id": int,
+            #         "pose": {
+            #             "position": float[3],
+            #             "rotation": float[3]
+            #         }
+            #     }
+
+            tag_id = data["id"]
+            rot = data["pose"]["rotation"]
+            pos,hpr = self.tags[tag_id]["object"].locate_robot(
+                data["pose"]["position"],
+                data["pose"]["rotation"],
+                (0,0,0), 0,
+                (0,0,0), 0
+            )
+            
+            self.robot.setPos(pos)
+            self.robot.setHpr(hpr)
+            
+            pass
+        
+        def handle_navigation_command(data):
+            
+            action = data["action"]
+            
+            if action == "move_to_charger":
+                if "charger" in self.zones: # zone name for charging must match this
+                    self.robot.navigate_to_location("charger")
+                else:
+                    print("error: charging location not found")
+                    
+            elif action == "estop":
+                self.robot.stop()
+            
+            
+        self.node.subscribe("camera/tag_found",handle_tag_found)
+        self.node.subscribe("navigation/command",handle_navigation_command)
+        
+        self.robot.navigate_to_location("charger")
+        
     
     def update(self, task):
         
@@ -102,7 +140,8 @@ class Simulation(ShowBase):
 
         self.pos_label.setText(
             f"World: ({world_pos.x:.2f}, {world_pos.y:.2f}, {world_pos.z:.2f})\n"
-            f"Grid: ({grid_pos[0]}, {grid_pos[1]})"
+            f"Grid: ({grid_pos[0]}, {grid_pos[1]})\n"
+            f"Battery level: {int(self.robot.status.batteryLevel)}%"
         )
 
         return task.cont
