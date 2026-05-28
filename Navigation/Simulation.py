@@ -6,6 +6,7 @@ from direct.task import Task
 from classes.Robot import Robot
 from classes.Environment import Environment
 from classes.GridVisualizer import GridVisualizer
+from classes.OrbitCamera import OrbitCamera
 import time
 import math
 import json
@@ -35,7 +36,7 @@ class Simulation(ShowBase):
         self.sim = args.sim
         self.node = node
         
-        # self.disableMouse()
+        self.disableMouse()
         
         # load grid map
         with open(os.path.join(this_directory,mapDir,"./map.json"),"r") as map:
@@ -71,7 +72,7 @@ class Simulation(ShowBase):
         
         
         if self.show:
-            base.cam.setPos(robot_position.getX(),robot_position.getY(),20)
+            # base.cam.setPos(robot_position.getX(),robot_position.getY(),20)
 
             self.pos_label = OnscreenText(
                 text="",
@@ -125,8 +126,8 @@ class Simulation(ShowBase):
             
         self.node.subscribe("camera/tag_found",handle_tag_found)
         self.node.subscribe("navigation/command",handle_navigation_command)
-        
-        self.robot.navigate_to_location("charger")
+                
+        self.camera_controller = OrbitCamera(base, self.robot)
         
     
     def update(self, task):
