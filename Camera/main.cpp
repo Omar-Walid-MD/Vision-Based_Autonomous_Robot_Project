@@ -5,6 +5,12 @@
 #include <gst/app/gstappsink.h>
 #include <gst/app/gstappsrc.h>
 #include <signal.h>
+#include <unordered_map>
+#include <vector>
+#include <nlohmann/json.hpp>
+#include <filesystem>
+
+#include "Node.h"
 
 extern "C" {
 #include <apriltag/apriltag.h>
@@ -15,6 +21,29 @@ extern "C" {
 
 using namespace cv;
 using namespace std;
+
+struct TagData
+{
+    int id;
+
+    cv::Vec3d position;
+    cv::Vec3d rotation;
+
+    double distance;
+
+    std::uint64_t timestamp_ms;
+};
+
+
+// ==========================================
+// Tag persistence filter
+// ==========================================
+std::unordered_map<int, int> tag_frame_count;
+
+const int TAG_APPROVED_COUNT = 3;
+
+
+SocketNode my_node = SocketNode("camera0");
 
 // ==========================
 // Rotation Matrix to Euler
@@ -227,8 +256,16 @@ int main(int argc, char* argv[])
     // ==========================================
     // Camera calibration
     // ==========================================
-    FileStorage fs("camera_calib.yaml", FileStorage::READ);
+    std::filesystem::path exe_path =
+        std::filesystem::canonical(argv[0]).parent_path();
 
+    std::filesystem::path calib_path =
+        exe_path / "camera_calib.yaml";
+
+    std::cout << "Loading calibration from: "
+              << calib_path << std::endl;
+
+    FileStorage fs(calib_path.string(), FileStorage::READ);
     Mat cameraMatrix, distCoeffs;
 
     fs["camera_matrix"] >> cameraMatrix;
@@ -337,12 +374,19 @@ int main(int argc, char* argv[])
 
         zarray_t *detections =
             apriltag_detector_detect(td, &im);
+            
+        std::vector<TagData> detected_tags;
+        std::vector<int> detected_tag_ids;
 
         for (int i = 0; i < zarray_size(detections); i++)
         {
             apriltag_detection_t *det;
 
             zarray_get(detections, i, &det);
+            
+            int marker_id = det->id;
+
+            detected_tag_ids.push_back(marker_id);
 
             apriltag_detection_info_t info;
 
@@ -397,6 +441,47 @@ int main(int argc, char* argv[])
                  << endl;
 
             cout << "------------------------" << endl;
+            
+            if (tag_frame_count.count(marker_id))
+            {
+                tag_frame_count[marker_id]++;
+
+                if (tag_frame_count[marker_id] >= TAG_APPROVED_COUNT)
+                {
+                    TagData tag;
+
+                    tag.id = marker_id;
+
+                    tag.position = cv::Vec3d(
+                        t.at<double>(0),
+                        t.at<double>(1),
+                        t.at<double>(2)
+                    );
+
+                    tag.rotation = cv::Vec3d(
+                        roll,
+                        pitch,
+                        yaw
+                    );
+
+                    tag.distance = distance;
+
+                    tag.timestamp_ms =
+                        std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::system_clock::now().time_since_epoch()
+                        ).count();
+
+                    detected_tags.push_back(tag);
+                    std::cout << "APPROVED TAG: "
+                              << marker_id
+                              << std::endl;
+                    
+                }
+            }
+            else
+            {
+                tag_frame_count[marker_id] = 1;
+            }
 
             if (show)
             {
@@ -521,6 +606,82 @@ int main(int argc, char* argv[])
                     2
                 );
             }
+        }
+        
+        // ==========================================
+        // Send tags if detected
+        // ==========================================
+        if(detected_tags.size() > 0)
+        {
+            nlohmann::json payload;
+
+            payload["tags"] = nlohmann::json::array();
+
+            for (const auto& tag : detected_tags)
+            {
+                nlohmann::json tag_json;
+
+                tag_json["id"] = tag.id;
+                tag_json["distance"] = tag.distance;
+
+                tag_json["pose"] = {
+                {
+                    "position",
+                    {
+                        tag.position[0],
+                        tag.position[1],
+                        tag.position[2]
+                    }
+                },
+                {
+                    "rotation",
+                    {
+                        tag.rotation[0],
+                        tag.rotation[1],
+                        tag.rotation[2]
+                    }
+                }
+            };
+
+                payload["tags"].push_back(tag_json);
+            }
+
+            my_node.send(
+                "camera/tags_found",
+                payload.dump()
+            );
+        }
+        
+        // ==========================================
+        // Remove tags missing this frame
+        // ==========================================
+        std::vector<int> tags_to_remove;
+
+        for (const auto& pair : tag_frame_count)
+        {
+            int id = pair.first;
+
+            bool found = false;
+
+            for (int tag_id : detected_tag_ids)
+            {
+                
+                if (tag_id == id)
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found)
+            {
+                tags_to_remove.push_back(id);
+            }
+        }
+
+        for (int id : tags_to_remove)
+        {
+            tag_frame_count.erase(id);
         }
 
         apriltag_detections_destroy(detections);

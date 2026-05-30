@@ -13,6 +13,8 @@ import json
 import sys
 import os
 from pathfinding import marginizeGrid
+from queue import Queue
+
 
 this_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -55,6 +57,8 @@ class Simulation(ShowBase):
         self.env = Environment(self,mapDir)
         self.robot = Robot(self,robotSize)
         
+        self.tag_queue = Queue()    
+        
         if self.show:
             self.gridVisualizer = GridVisualizer(self)
 
@@ -88,27 +92,19 @@ class Simulation(ShowBase):
         self.taskMgr.add(self.update,"update")
         
         def handle_tag_found(data):
-            # data = {
-            #         "id": int,
-            #         "pose": {
-            #             "position": float[3],
-            #             "rotation": float[3]
-            #         }
-            #     }
+            if isinstance(data, str):
+                data = json.loads(data)
 
-            tag_id = data["id"]
-            rot = data["pose"]["rotation"]
-            pos,hpr = self.tags[tag_id]["object"].locate_robot(
-                data["pose"]["position"],
-                data["pose"]["rotation"],
-                (0,0,0), 0,
-                (0,0,0), 0
-            )
+            tags = data.get("tags", [])
+
+            if not tags:
+                return
+
+            closest_tag = min(tags, key=lambda tag: tag["distance"])
+
+            self.tag_queue.put(closest_tag)
             
-            self.robot.setPos(pos)
-            self.robot.setHpr(hpr)
             
-            pass
         
         def handle_navigation_command(data):
             
@@ -124,7 +120,7 @@ class Simulation(ShowBase):
                 self.robot.stop()
             
             
-        self.node.subscribe("camera/tag_found",handle_tag_found)
+        self.node.subscribe("camera/tags_found",handle_tag_found)
         self.node.subscribe("navigation/command",handle_navigation_command)
                 
         self.camera_controller = OrbitCamera(base, self.robot)
@@ -132,7 +128,9 @@ class Simulation(ShowBase):
     
     def update(self, task):
         
+        self.process_tag_updates()
         self.robot.update()
+        
         return Task.cont
 
     def update_ui(self, task):
@@ -175,14 +173,31 @@ class Simulation(ShowBase):
     
                 
                 
-    # TOPIC FUNCTIONS
-    def process_april_tag(self,data):
-        if self.tags.get(data["id"],None) is not None:
-            self.tags[data["id"]].locate(data["position"],data["rotation"])
-        else:
-            print("Tag not found in map")
-
     
+            
+    def process_tag_updates(self):
+
+        while not self.tag_queue.empty():
+
+            data = self.tag_queue.get()
+
+            tag_id = data["id"]
+
+            pos, hpr = self.tags[tag_id]["object"].locate_robot(
+                data["pose"]["position"],
+                data["pose"]["rotation"],
+                (0,0,0), 0,
+                (0,0,0), 0
+            )
+
+            self.robot.setPos(pos)
+            self.robot.setHpr(hpr)
+
+            print("tag found")
+
+        return
+
+        
         
 
              

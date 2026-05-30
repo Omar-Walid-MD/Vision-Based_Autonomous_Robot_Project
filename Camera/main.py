@@ -285,7 +285,7 @@ while True:
                         }
                     }
                     
-                    node.send("camera/tag_found", payload)
+                    node.send("camera/tags_found", payload)
             else:
                 tag_frame_count[marker_id] = 1
 
