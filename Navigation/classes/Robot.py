@@ -173,9 +173,23 @@ class Robot(NodePath):
         self.point_index += 1
         
     def simulate_battery(self):
-        if self.status.recharging:
-            self.status.batteryLevel = min(100, bat + globalClock.getDt())
+        # 1. Get coordinates directly using NodePath built-ins (No getPos required!)
+        actual_x = self.getX()
+        actual_y = self.getY()
 
+        # 2. Check if the actual location matches the station
+        # (Using a wider tolerance of 0.3 to guarantee it registers the zone cleanly)
+        at_charging_x = math.isclose(actual_x, 18.40, abs_tol=0.3)
+        at_charging_y = math.isclose(actual_y, -20.60, abs_tol=0.3)
+
+        if (self.status.batteryLevel < 10) and at_charging_x and at_charging_y:
+            self.status.recharging = True
+        elif self.status.recharging == True and self.status.batteryLevel == 100:
+            self.status.recharging = False
+
+        if self.status.recharging:
+            bat = self.status.batteryLevel
+            self.status.batteryLevel = min(100, bat + globalClock.getDt())
         else:
             bat = self.status.batteryLevel
             self.status.batteryLevel = max(0, bat - globalClock.getDt())

@@ -110,17 +110,27 @@ aruco_params = cv2.aruco.DetectorParameters()
 detector = cv2.aruco.ArucoDetector(
     aruco_dict,
     aruco_params
+	
 )
 
 
 # ==========================
 # Calibration (.npz)
 # ==========================
-calib = np.load("./Camera/camera_calib.npz")
+fs = cv2.FileStorage(
+    "./Camera/camera_calib.yaml",
+    cv2.FILE_STORAGE_READ
+)
 
-camera_matrix = calib["camera_matrix"]
-dist_coeffs = calib["dist_coeffs"]
+camera_matrix = fs.getNode(
+    "camera_matrix"
+).mat()
 
+dist_coeffs = fs.getNode(
+    "dist_coeffs"
+).mat()
+
+fs.release()
 fx = camera_matrix[0, 0]
 fy = camera_matrix[1, 1]
 cx = camera_matrix[0, 2]

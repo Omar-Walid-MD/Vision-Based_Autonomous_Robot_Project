@@ -126,7 +126,7 @@ class Simulation(ShowBase):
         self.node.subscribe("camera/tag_found",handle_tag_found)
         self.node.subscribe("navigation/command",handle_navigation_command)
         
-        self.robot.navigate_to_location("charger")
+        self.robot.navigate_to_location("D")
         
     
     def update(self, task):

@@ -93,7 +93,8 @@ class BehaviourNode(Node):
                     root=self._tree.root,
                     show_status=True
                 ))
-                
+ 
+               
                 # print("\nBLACKBOARD:")
                 # print(f"localized: {self._bb.localized}")
                 # print(f"battery: {self._bb.battery_level}")
@@ -110,7 +111,7 @@ class BehaviourNode(Node):
 
     def _on_battery(self, payload):
         # payload: {"level": <int>}
-        self._bb.battery_level = int(payload.get("level", self._bb.battery_level))
+        self._bb.battery_level = int(payload)
 
     def _on_obstacle(self, payload):
         # payload: {"detected": <bool>}
