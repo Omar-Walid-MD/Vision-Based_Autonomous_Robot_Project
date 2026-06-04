@@ -95,9 +95,11 @@ class Simulation(ShowBase):
             #             "rotation": float[3]
             #         }
             #     }
+            
+            if isinstance(data, str):
+                data = json.loads(data)
 
             tag_id = data["id"]
-            rot = data["pose"]["rotation"]
             pos,hpr = self.tags[tag_id]["object"].locate_robot(
                 data["pose"]["position"],
                 data["pose"]["rotation"],

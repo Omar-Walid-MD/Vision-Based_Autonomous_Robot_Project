@@ -8,6 +8,7 @@ import numpy as np
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))) # add parent folder to paths
 from Server.Node import Node
+print(cv2.__version__)
 
 # ==========================
 # Rotation Matrix to Euler

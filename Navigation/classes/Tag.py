@@ -65,8 +65,8 @@ class Tag:
 
         converted_rotation = (
             rotation[2],
-            rotation[1],
-            rotation[0]
+            rotation[0],
+            rotation[1]
         )
 
         T_camera_tag = make_transform(
