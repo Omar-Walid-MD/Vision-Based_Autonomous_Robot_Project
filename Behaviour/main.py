@@ -89,7 +89,8 @@ class BehaviourNode(Node):
                     root=self._tree.root,
                     show_status=True
                 ))
-                
+ 
+               
                 # print("\nBLACKBOARD:")
                 # print(f"localized: {self._bb.localized}")
                 # print(f"battery: {self._bb.battery_level}")

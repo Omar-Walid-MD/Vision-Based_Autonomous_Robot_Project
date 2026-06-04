@@ -13,11 +13,8 @@ import json
 import sys
 import os
 from pathfinding import marginizeGrid
-<<<<<<< HEAD
-=======
 from queue import Queue
 
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
 
 this_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -60,11 +57,8 @@ class Simulation(ShowBase):
         self.env = Environment(self,mapDir)
         self.robot = Robot(self,robotSize)
         
-<<<<<<< HEAD
-=======
         self.tag_queue = Queue()    
         
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
         if self.show:
             self.gridVisualizer = GridVisualizer(self)
 
@@ -98,31 +92,6 @@ class Simulation(ShowBase):
         self.taskMgr.add(self.update,"update")
         
         def handle_tag_found(data):
-<<<<<<< HEAD
-            # data = {
-            #         "id": int,
-            #         "pose": {
-            #             "position": float[3],
-            #             "rotation": float[3]
-            #         }
-            #     }
-            
-            if isinstance(data, str):
-                data = json.loads(data)
-
-            tag_id = data["id"]
-            pos,hpr = self.tags[tag_id]["object"].locate_robot(
-                data["pose"]["position"],
-                data["pose"]["rotation"],
-                (0,0,0), 0,
-                (0,0,0), 0
-            )
-            
-            self.robot.setPos(pos)
-            self.robot.setHpr(hpr)
-            
-            pass
-=======
             if isinstance(data, str):
                 data = json.loads(data)
 
@@ -136,7 +105,6 @@ class Simulation(ShowBase):
             self.tag_queue.put(closest_tag)
             
             
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
         
         def handle_navigation_command(data):
             
@@ -152,11 +120,7 @@ class Simulation(ShowBase):
                 self.robot.stop()
             
             
-<<<<<<< HEAD
-        self.node.subscribe("camera/tag_found",handle_tag_found)
-=======
         self.node.subscribe("camera/tags_found",handle_tag_found)
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
         self.node.subscribe("navigation/command",handle_navigation_command)
                 
         self.camera_controller = OrbitCamera(base, self.robot)
@@ -164,13 +128,9 @@ class Simulation(ShowBase):
     
     def update(self, task):
         
-<<<<<<< HEAD
-        self.robot.update()
-=======
         self.process_tag_updates()
         self.robot.update()
         
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
         return Task.cont
 
     def update_ui(self, task):
@@ -213,16 +173,6 @@ class Simulation(ShowBase):
     
                 
                 
-<<<<<<< HEAD
-    # TOPIC FUNCTIONS
-    def process_april_tag(self,data):
-        if self.tags.get(data["id"],None) is not None:
-            self.tags[data["id"]].locate(data["position"],data["rotation"])
-        else:
-            print("Tag not found in map")
-
-    
-=======
     
             
     def process_tag_updates(self):
@@ -248,7 +198,6 @@ class Simulation(ShowBase):
         return
 
         
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
         
 
              
