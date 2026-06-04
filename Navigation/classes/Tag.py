@@ -59,14 +59,24 @@ class Tag:
         # 2. Tag in camera (from detection)
         converted_offset = (
             offset[0],
+<<<<<<< HEAD
             -offset[2],
+=======
+            offset[2],
+>>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
             offset[1]
         )
 
         converted_rotation = (
+<<<<<<< HEAD
             rotation[2],
             rotation[1],
             rotation[0]
+=======
+            -rotation[2],
+            rotation[0],
+            -rotation[1]
+>>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
         )
 
         T_camera_tag = make_transform(
@@ -100,6 +110,12 @@ class Tag:
         pos = T_world_robot.getPos()
         hpr = T_world_robot.getHpr()
         
+<<<<<<< HEAD
         hpr[0] -= 90
 
         return pos, hpr
+=======
+        hpr[0] += 90
+
+        return pos, hpr
+>>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
