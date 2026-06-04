@@ -165,8 +165,6 @@ class Robot(NodePath):
             position.setY(position.getY() + direction.y * move_step)
 
             self.setPos(position)
-            if self.scene.show:
-                base.cam.setPos(position.getX(),position.getY(),20)
 
             return
         
