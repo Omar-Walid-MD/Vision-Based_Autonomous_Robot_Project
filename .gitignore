@@ -1,0 +1,23 @@
+# Ignore virtual environments
+venv/
+.env/
+.env
+
+# Ignore build artifacts
+build/
+dist/
+*.egg-info/
+*.zip
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+*.so
+
+# Ignore Camera Callibration
+*.npz
+*.yaml
+calib_images/
+vosk-en-us/
+
+start.json
