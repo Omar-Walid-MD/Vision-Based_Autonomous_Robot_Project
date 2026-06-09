@@ -8,6 +8,7 @@ import numpy as np
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))) # add parent folder to paths
 from Server.Node import Node
+print(cv2.__version__)
 
 # ==========================
 # Rotation Matrix to Euler
@@ -110,17 +111,27 @@ aruco_params = cv2.aruco.DetectorParameters()
 detector = cv2.aruco.ArucoDetector(
     aruco_dict,
     aruco_params
+	
 )
 
 
 # ==========================
 # Calibration (.npz)
 # ==========================
-calib = np.load("./Camera/camera_calib.npz")
+fs = cv2.FileStorage(
+    "./Camera/camera_calib.yaml",
+    cv2.FILE_STORAGE_READ
+)
 
-camera_matrix = calib["camera_matrix"]
-dist_coeffs = calib["dist_coeffs"]
+camera_matrix = fs.getNode(
+    "camera_matrix"
+).mat()
 
+dist_coeffs = fs.getNode(
+    "dist_coeffs"
+).mat()
+
+fs.release()
 fx = camera_matrix[0, 0]
 fy = camera_matrix[1, 1]
 cx = camera_matrix[0, 2]
@@ -214,9 +225,9 @@ while True:
             )
             
 
-            # ==========================
+         
             # Rotation matrix
-            # ==========================
+          
             R, _ = cv2.Rodrigues(rvec)
 
             sy = np.sqrt(R[0,0] * R[0,0] + R[1,0] * R[1,0])
@@ -224,7 +235,7 @@ while True:
             singular = sy < 1e-6
 
             if not singular:
-                pitch = np.arctan2(R[2,1], R[2,2])
+                pitch = np.arctan2(R[2,1], R[2,2])https://github.com/Omar-Walid-MD/Vision-Based_Autonomous_Robot_Project/pull/1/conflict?name=Camera%252Fmain.py&ancestor_oid=36ef3ca6f83cb518ca21f6c75a350779f1cdc58f&base_oid=fc5056bff0efd8b9eab3a56e8716d475b3358eee&head_oid=4b69d99a3150d645958f03d5e013470c495a1cb1
                 yaw = np.arctan2(-R[2,0], sy)
                 roll = np.arctan2(R[1,0], R[0,0])
             else:
@@ -294,9 +305,9 @@ while True:
     for id in tags_to_remove:
         tag_frame_count.pop(id,None)
 
-    # ===================================================
+  
     # FPS Measurement
-    # ===================================================
+
     frame_count += 1
 
     if frame_count >= 60:
@@ -313,9 +324,9 @@ while True:
         frame_count = 0
         start_time = now
 
-    # ===================================================
+   
     # Display
-    # ===================================================
+ 
     if SHOW:
         cv2.imshow("AprilTag Detection", frame)
 
@@ -325,10 +336,11 @@ while True:
             break
 
 
-# ==========================
+
 # Cleanup
-# ==========================
+
 cap.release()
 cv2.destroyAllWindows()
 
 print("Stopped")
+

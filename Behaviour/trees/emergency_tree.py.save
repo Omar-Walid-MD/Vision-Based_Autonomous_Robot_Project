@@ -1,4 +1,4 @@
-import py_trees
+\import py_trees
 
 
 # ── Conditions (blackboard only) ────────────────────────────────────────────
@@ -6,25 +6,16 @@ import py_trees
 class IsBatteryLow(py_trees.behaviour.Behaviour):
     THRESHOLD = 20
 
-    def __init__(self, node):
+    def __init__(self):
         super().__init__(name="Is Battery Low?")
-        self._node = node
         self.bb = self.attach_blackboard_client(name=self.name)
         self.bb.register_key(key="battery_level", access=py_trees.common.Access.READ)
-        self._was_low = False  # Track state changes
 
     def update(self):
         if self.bb.battery_level <= self.THRESHOLD:
-            self._was_low = True
             return py_trees.common.Status.SUCCESS
-        
-        # ── STATE CHANGE DETECTED ──────────────────────────────────────────
-        # If the battery WAS low, but is now HIGH (> Vth), start listening!
-        if self._was_low:
-            self._node.send("voice/command", {"action": "listen"})
-            self._was_low = False # Reset state
-            
         return py_trees.common.Status.FAILURE
+
 
 class IsObstacleDetected(py_trees.behaviour.Behaviour):
 
@@ -46,39 +37,11 @@ class MoveToCharger(py_trees.behaviour.Behaviour):
     def __init__(self, node):
         super().__init__(name="Move To Charger")
         self._node = node
-        self._cmd_sent = False
-        
-        self.bb = self.attach_blackboard_client(name=self.name)
-        self.bb.register_key(key="nav_status", access=py_trees.common.Access.READ)
-        self.bb.register_key(key="current_task", access=py_trees.common.Access.WRITE)
-
-    def initialise(self):
-        self._cmd_sent = False
 
     def update(self):
-        # 1. Send the move command once
-        if not self._cmd_sent:
-            self._node.send("navigation/command", {"action": "move_to_charger"})
-            self.bb.current_task = "charging"
-            self._cmd_sent = True
-
-        # 2. Monitor status
-        status = self.bb.nav_status   
-        
-        if status == "done":
-            # ── FUSED CLEANUP LOGIC ──────────────────────────────────────────
-            # The moment we succeed, we immediately stop the voice listener here
-            self._node.send("voice/command", {"action": "stop_listening"})
-            # ─────────────────────────────────────────────────────────────────
-            
-            self.bb.current_task = None  
-            return py_trees.common.Status.SUCCESS  
-            
-        if status == "failed":
-            self.bb.current_task = None
-            return py_trees.common.Status.FAILURE
-            
+        self._node.send("navigation/command", {"action": "move_to_charger"})
         return py_trees.common.Status.RUNNING
+
 
 class EStop(py_trees.behaviour.Behaviour):
 
@@ -109,7 +72,7 @@ def create_emergency_tree(node):
     root = py_trees.composites.Selector(name="Emergency & Safety", memory=False)
 
     battery_seq = py_trees.composites.Sequence(name="Low Battery Branch", memory=False)
-    battery_seq.add_children([IsBatteryLow(node), MoveToCharger(node)])
+    battery_seq.add_children([IsBatteryLow(), MoveToCharger(node)])
 
     obstacle_seq = py_trees.composites.Sequence(name="Obstacle Branch", memory=False)
     obstacle_seq.add_children([
