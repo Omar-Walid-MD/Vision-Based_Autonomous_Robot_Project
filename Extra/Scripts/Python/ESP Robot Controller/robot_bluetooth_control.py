@@ -23,6 +23,12 @@ controls = {
 
 controls_keyup = {"w": "S", "a": "S", "s": "S", "d": "S", "m": "S", "n": "S"}
 
+parameters = [
+    {"key": "kp", "label": "K Proportional", "value": ""},
+    {"key": "ki", "label": "K Integral", "value": ""},
+    {"key": "kd", "label": "K Derivative", "value": ""},
+    {"key": "ms", "label": "Max Speed", "value": ""},
+]
 
 # -----------------------------
 # App Class
@@ -51,6 +57,11 @@ class RobotRemoteApp(ctk.CTk):
             0: 0,
             1: 0
         }
+        
+        self.command_history = []
+        self.history_index = -1
+        
+        self.parameters = parameters
         
         self.grid_rowconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
@@ -164,7 +175,37 @@ class RobotRemoteApp(ctk.CTk):
         self.text0 = self.speed_canvas.create_text(90, 160,text="M0: 0",fill="white",font=("Arial", 12, "bold"))
         self.text1 = self.speed_canvas.create_text(210, 160,text="M1: 0",fill="white",font=("Arial", 12, "bold"))
         
+        params_frame = ctk.CTkFrame(side_frame)
+        params_frame.grid(row=2, column=0, sticky="nsew", padx=5, pady=5)
         
+        side_frame.grid_rowconfigure(0, weight=1)  # compass
+        side_frame.grid_rowconfigure(1, weight=1)  # speed graph
+        side_frame.grid_rowconfigure(2, weight=0)  # parameters
+        
+        self.param_entries = {}
+
+        for row, param in enumerate(self.parameters):
+            label = ctk.CTkLabel(
+                params_frame,
+                text=param["label"],
+                anchor="w"
+            )
+            label.grid(row=row, column=0, sticky="w", padx=5, pady=2)
+
+            entry = ctk.CTkEntry(params_frame, width=80)
+            entry.grid(row=row, column=1, padx=5, pady=2)
+
+            if param["value"]:
+                entry.insert(0, str(param["value"]))
+
+            entry.bind(
+                "<Return>",
+                lambda event, p=param, e=entry:
+                    self.send_parameter(p["key"], e)
+            )
+
+            self.param_entries[param["key"]] = entry
+
         # Input + Send
         input_frame = ctk.CTkFrame(self)
         input_frame.grid(row=4, column=0, columnspan=2, sticky="ew", pady=5)
@@ -173,6 +214,9 @@ class RobotRemoteApp(ctk.CTk):
 
         self.input_entry = ctk.CTkEntry(input_frame, placeholder_text="Type command...")
         self.input_entry.grid(row=0, column=0, sticky="ew", padx=5)
+        
+        self.input_entry.bind("<Up>", self.history_up)
+        self.input_entry.bind("<Down>", self.history_down)
 
         self.send_btn = ctk.CTkButton(input_frame, text="Send", command=self.send_text_input)
         self.send_btn.grid(row=0, column=1, padx=5)
@@ -335,6 +379,23 @@ class RobotRemoteApp(ctk.CTk):
             return
 
         asyncio.run_coroutine_threadsafe(self.ble_send(message), self.loop)
+        
+    def send_parameter(self, key, entry):
+        value = entry.get().strip()
+
+        if value == "":
+            return
+
+        try:
+            float(value)
+        except ValueError:
+            self.error_var.set(f"Invalid value for {key}")
+            return
+
+        cmd = f"{key}{value}"
+
+        self.send_ble(cmd)
+        self.log_to_terminal(f"→ Sent: {cmd}")
 
     def update_compass(self):
         """Update compass needle. 0° = North, clockwise positive."""
@@ -410,9 +471,49 @@ class RobotRemoteApp(ctk.CTk):
 
     def send_text_input(self):
         text = self.input_entry.get().strip()
+
         if text:
             self.send_ble(text)
+
+            # Store in history
+            self.command_history.append(text)
+
+            # Reset navigation index
+            self.history_index = len(self.command_history)
+
             self.input_entry.delete(0, "end")
+            
+    def history_up(self, event=None):
+        if not self.command_history:
+            return
+
+        # Move upward in history
+        self.history_index = max(0, self.history_index - 1)
+
+        cmd = self.command_history[self.history_index]
+
+        self.input_entry.delete(0, "end")
+        self.input_entry.insert(0, cmd)
+
+
+    def history_down(self, event=None):
+        if not self.command_history:
+            return
+
+        # Move downward
+        self.history_index = min(
+            len(self.command_history),
+            self.history_index + 1
+        )
+
+        self.input_entry.delete(0, "end")
+
+        # If at newest position -> blank
+        if self.history_index == len(self.command_history):
+            return
+
+        cmd = self.command_history[self.history_index]
+        self.input_entry.insert(0, cmd)
 
     def on_closing(self):
         self.connected = False
