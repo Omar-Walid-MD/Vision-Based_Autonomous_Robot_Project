@@ -5,12 +5,7 @@ screen_controller.py - ScreenController for the Peripherals Node.
 import logging
 
 from config import PeripheralsConfig
-from servo_driver import load_hardware_libraries, CharLCD
-
-import os
-env = os.environ.copy()
-platform = os.getenv("PLATFORM")
-
+import servo_driver as _hw   # Access module-level globals after load_hardware_libraries() runs
 
 
 class ScreenController:
@@ -18,18 +13,18 @@ class ScreenController:
 
     def __init__(self, config: PeripheralsConfig, mock: bool = False):
         self.config = config
-        self.mock = platform != "RPI" or mock
+        self.mock = mock
         self.current_text = ""
         self.lcd = None
 
         if not self.mock:
-            if CharLCD is None:
-                load_hardware_libraries()
-            if CharLCD is None:
+            _hw.load_hardware_libraries()
+
+            if _hw.CharLCD is None:
                 raise RuntimeError(
                     "RPLCD library not installed. Install with: pip install RPLCD"
                 )
-            self.lcd = CharLCD(
+            self.lcd = _hw.CharLCD(
                 i2c_expander="PCF8574",
                 address=self.config.lcd_address,
                 port=1,

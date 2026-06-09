@@ -46,6 +46,7 @@ engine = None
 if platform != "RPI":
     engine = pyttsx3.init()
 
+# espeak -v mb-en1 -s 100 "Hello, world"
 def speak(text):
     print(f"[TTS]: {text}")
 

@@ -12,6 +12,6 @@ node = Node("test_1",url="http://localhost:5000")
 # node.subscribe("data",get_data)
 
 while True:
-    message = input("Enter message: ")
-    node.send("send_data",message)
+    topic = input("Enter topic: ")
+    node.send(topic,"data")
 

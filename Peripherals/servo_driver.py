@@ -7,11 +7,6 @@ from typing import Dict
 
 from config import PeripheralsConfig, ServoConfig
 
-import os
-env = os.environ.copy()
-platform = os.getenv("PLATFORM")
-
-
 # Optional hardware libraries; populated by load_hardware_libraries().
 PCA9685 = None
 busio = None
@@ -25,29 +20,29 @@ def load_hardware_libraries() -> None:
     """Load hardware libraries only on Raspberry Pi / real mode."""
     global PCA9685, busio, board, MLX90614, MAX30102, CharLCD
 
-    if platform == "RPI":
-        from adafruit_pca9685 import PCA9685 as _PCA9685
-        import busio as _busio
-        import board as _board
+    from adafruit_pca9685 import PCA9685 as _PCA9685
+    import busio as _busio
+    import board as _board
 
-        from adafruit_mlx90614 import MLX90614 as _MLX90614
+    from adafruit_mlx90614 import MLX90614 as _MLX90614
 
-        try:
-            from max30102 import MAX30102 as _MAX30102
-        except Exception:
-            _MAX30102 = None
+    # Imported from the cloned max30102 repo subfolder: max30102/max30102.py
+    try:
+        from max30102.max30102 import MAX30102 as _MAX30102
+    except Exception:
+        _MAX30102 = None
 
-        try:
-            from RPLCD.i2c import CharLCD as _CharLCD
-        except Exception:
-            _CharLCD = None
+    try:
+        from RPLCD.i2c import CharLCD as _CharLCD
+    except Exception:
+        _CharLCD = None
 
-        PCA9685 = _PCA9685
-        busio = _busio
-        board = _board
-        MLX90614 = _MLX90614
-        MAX30102 = _MAX30102
-        CharLCD = _CharLCD
+    PCA9685 = _PCA9685
+    busio = _busio
+    board = _board
+    MLX90614 = _MLX90614
+    MAX30102 = _MAX30102
+    CharLCD = _CharLCD
 
 
 def clamp(value: float, minimum: float, maximum: float) -> float:
@@ -59,7 +54,7 @@ class ServoDriver:
 
     def __init__(self, config: PeripheralsConfig, mock: bool = False):
         self.config = config
-        self.mock = platform != "RPI" or mock
+        self.mock = mock
         self.pca = None
         self.servo_angles: Dict[int, int] = {}
 
@@ -82,7 +77,7 @@ class ServoDriver:
         self.servo_angles[servo.channel] = safe_angle
 
         if self.mock:
-            logging.info("[MOCK] Servo channel %s -> %s°", servo.channel, safe_angle)
+            logging.info("[MOCK] Servo channel %s -> %s", servo.channel, safe_angle)
         else:
             self.pca.channels[servo.channel].duty_cycle = self.angle_to_duty_cycle(safe_angle)
 

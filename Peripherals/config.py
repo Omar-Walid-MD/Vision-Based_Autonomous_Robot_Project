@@ -2,7 +2,7 @@
 config.py - Configuration dataclasses for the Peripherals Node.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -29,11 +29,11 @@ class PeripheralsConfig:
     heart_sensor_address: int = 0x57  # MAX30102 / MAX30105 common address
 
     # Servo channels on PCA9685
-    arm_base: ServoConfig = ServoConfig(channel=0, min_angle=0, max_angle=180, default_angle=90)
-    arm_shoulder: ServoConfig = ServoConfig(channel=1, min_angle=15, max_angle=165, default_angle=90)
-    arm_elbow: ServoConfig = ServoConfig(channel=2, min_angle=15, max_angle=165, default_angle=90)
-    head_pan: ServoConfig = ServoConfig(channel=3, min_angle=0, max_angle=180, default_angle=90)
-    head_tilt: ServoConfig = ServoConfig(channel=4, min_angle=40, max_angle=140, default_angle=90)
+    arm_base: ServoConfig = field(default_factory=lambda: ServoConfig(channel=0, min_angle=0, max_angle=180, default_angle=90))
+    arm_shoulder: ServoConfig = field(default_factory=lambda: ServoConfig(channel=1, min_angle=15, max_angle=165, default_angle=90))
+    arm_elbow: ServoConfig = field(default_factory=lambda: ServoConfig(channel=2, min_angle=15, max_angle=165, default_angle=90))
+    head_pan: ServoConfig = field(default_factory=lambda: ServoConfig(channel=3, min_angle=0, max_angle=180, default_angle=90))
+    head_tilt: ServoConfig = field(default_factory=lambda: ServoConfig(channel=4, min_angle=40, max_angle=140, default_angle=90))
 
     # Node behavior
     publish_interval_sec: float = 1.0
