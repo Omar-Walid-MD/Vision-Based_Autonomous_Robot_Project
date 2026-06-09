@@ -14,10 +14,11 @@ esp -> pi:
     - recharging: boolean
 """
 
-MSG_TRANSFORM = 0x01
+MSG_MOVE_COMPLETED = 0x01
 MSG_BATTERY   = 0x02
 MSG_NAV       = 0x03
 MSG_RECHARGING = 0x04
+
 
 MSG_STOP = "stop"
 
@@ -54,14 +55,17 @@ class ESPSerial:
             msg_type = header[0]
 
             # TRANSFORM
-            if msg_type == MSG_TRANSFORM:
-                data = self.serial.read(12)
-                if len(data) < 12:
-                    return
+            # if msg_type == MSG_TRANSFORM:
+            #     data = self.serial.read(12)
+            #     if len(data) < 12:
+            #         return
 
-                x, y, r = struct.unpack('<fff', data)
-                self.status.transform = [x,y,r]
-                print(f"Transform: x={x}, y={y}, r={r}")
+            #     x, y, r = struct.unpack('<fff', data)
+            #     self.status.transform = [x,y,r]
+            #     print(f"Transform: x={x}, y={y}, r={r}")
+            
+            if msg_type == MSG_MOVE_COMPLETED:
+                self.robot.next_move()
 
             # BATTERY
             elif msg_type == MSG_BATTERY:

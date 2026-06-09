@@ -2,6 +2,7 @@ from panda3d.core import NodePath, Vec3
 from direct.task import Task
 import math
 import os
+import threading
 from pathfinding import aStarSearch
 from classes.RobotStatus import RobotStatus
 from classes.ESPSerial import ESPSerial
@@ -83,6 +84,55 @@ class Robot(NodePath):
         self.points = self.calculate_points(point)
         self.point_index = 0
         
+        self.send_move_to_serial()
+        
+    def send_move_to_serial(self):
+        
+        pos = self.getPos()
+        pos = [pos[0],pos[1]] # vector to list
+        
+        self.points[self.point_index] = pos
+        
+        current = self.scene.sim_to_world(pos)
+        target = self.scene.sim_to_world(self.points[self.point_index + 1])
+        
+        distance_to_target = distance_between_points(current, target)
+        rotation_angle = self.angle_to_face_target(current, target)
+        
+        rotation_angle = int(rotation_angle)
+        distance_to_target = int(distance_to_target * 100)
+        print(rotation_angle,distance_to_target)
+        
+        path_string = f"path:r,{rotation_angle};m,{distance_to_target};"
+        
+        self.serial.write(path_string)
+        
+    
+    def next_move(self):
+        
+        if len(self.points) == 0:
+            return
+        
+        self.point_index += 1
+        
+        new_current = self.points[self.point_index]
+
+        self.setPos(Vec3(new_current[0],new_current[1],self.getPos().getZ()))
+        a = angle_between_points(self.points[self.point_index-1],new_current)
+        print("angle: ",a)
+        self.setH(math.degrees(a))
+        
+        if self.point_index >= len(self.points) - 1:
+            print("reached end of path")
+            self.points = []
+            self.point_index = 0
+            return
+        
+        
+        
+        threading.Timer(2,self.send_move_to_serial).start()
+        
+
     def calculate_points(self,target):
         pos = self.getPos()
         pos = [pos[0],pos[1]] # vector to list
@@ -100,13 +150,24 @@ class Robot(NodePath):
         points[0] = pos # replace first estimated point with actual position
         return points
 
+
+    def angle_to_face_target(self, current, target):
+        angle_to_target = angle_between_points(current, target)
+        rotation_angle = math.degrees(angle_to_target - math.radians(self.getH()))
+        while rotation_angle > 180:
+            rotation_angle -= 360
+        while rotation_angle < -180:
+            rotation_angle += 360
+            
+        return rotation_angle
         
     def update(self):
         if self.sim:
             self.simulate_navigation()
             self.simulate_battery()
         else:
-            self.serial.update()    
+            self.serial.update()
+            pass
         
         self.send_battery_level()
         

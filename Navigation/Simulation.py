@@ -28,7 +28,7 @@ loadPrcFileData("",confVars)
 
 
 mapDir = "./map"
-robotSize = 0.475
+robotSize = 0.5
 
 class Simulation(ShowBase):
     def __init__(self,args,node):
@@ -122,8 +122,15 @@ class Simulation(ShowBase):
             
         self.node.subscribe("camera/tags_found",handle_tag_found)
         self.node.subscribe("navigation/command",handle_navigation_command)
-                
+        
+        # def handle_navigation_continue(data):
+        #     self.robot.next_move()
+                    
+        # self.node.subscribe("navigation/continue",handle_navigation_continue)
+
         self.camera_controller = OrbitCamera(base, self.robot)
+        
+        self.robot.navigate_to_location("charger")
         
     
     def update(self, task):

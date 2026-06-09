@@ -13,5 +13,5 @@ node = Node("test_1",url="http://localhost:5000")
 
 while True:
     message = input("Enter message: ")
-    node.send("send_data",message)
+    node.send("navigation/continue",message)
 

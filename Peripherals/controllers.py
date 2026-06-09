@@ -44,6 +44,9 @@ class ArmController:
 
     def rest_position(self) -> List[int]:
         return self.set_angles([90, 130, 60])
+    
+    def update():
+        pass
 
 
 class HeadController:
@@ -73,3 +76,6 @@ class HeadController:
             self.config.head_pan.default_angle,
             self.config.head_tilt.default_angle,
         )
+        
+    def update():
+        pass
