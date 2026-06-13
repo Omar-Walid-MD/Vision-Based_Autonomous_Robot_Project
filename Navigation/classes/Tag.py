@@ -46,6 +46,8 @@ class Tag:
         self.pointer.setLightOff()
         self.pointer.setColor((1,0,1,1))
         self.pointer.setTextureOff(1)
+        
+        self.pointer.hide()
     
     def locate_robot(
         self,

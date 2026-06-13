@@ -1,11 +1,10 @@
 #pragma once
 #include <ble.h>
 
-#define OBS_BLE_INTERVAL_MS  200   // send BLE update every 1000 ms
+#define OBS_BLE_INTERVAL_MS  200   // send BLE update every 200 ms
 
 // ─── External BLE instance (defined in main .ino) ────────────────────────────
 extern BLEModule ble;
-
 
 // ─── Pin Definitions ──────────────────────────────────────────────────────────
 #define SONAR_L_TRIG    39
@@ -16,14 +15,15 @@ extern BLEModule ble;
 #define SONAR_R_ECHO    6
 
 // ─── Thresholds (cm) ─────────────────────────────────────────────────────────
-#define DIST_STOP        15.0f
-#define DIST_WARN        50.0f
+#define DIST_STOP          15.0f
+#define DIST_WARN          50.0f
 #define DIST_MAX           150.0f
 #define SONAR_TIMEOUT_US   8741UL
 
 // ─── Filter Settings ─────────────────────────────────────────────────────────
-#define OBS_FILTER_SAMPLES     5      // number of readings to average
-#define OBS_CONFIRM_FRAMES     3      // consecutive filtered readings before triggering
+// Must be ODD for a clean median (no averaging of two middle elements)
+#define OBS_FILTER_SAMPLES     5      // number of past readings kept per sensor
+#define OBS_CONFIRM_FRAMES     3      // consecutive filtered readings before state change
 
 // ─── Obstacle location bitmask ───────────────────────────────────────────────
 typedef enum : uint8_t {
@@ -48,39 +48,38 @@ struct SensorReading {
     uint32_t         timestamp;
 };
 
-// ─── Internal state (inline to avoid multiple definition errors) ──────────────
-static SemaphoreHandle_t  s_mutex       = nullptr;
-static SensorReading      s_reading     = {};
-static void             (*s_motorStop)() = nullptr;
-static void             (*s_motorResume)()  = nullptr;   // add alongside s_motorStop
-static bool               s_wasInStop        = false;     // tracks previous hardStop state
+// ─── Internal state ────────────────────────────────────────────────────────────
+static SemaphoreHandle_t  s_mutex          = nullptr;
+static SensorReading      s_reading        = {};
+static void              (*s_motorStop)()  = nullptr;
+static void              (*s_motorResume)()= nullptr;
+static bool                s_wasInStop     = false;
 
+// ─── Filter ring buffers (one slot per sensor, shared index) ─────────────────
+static float    s_bufL[OBS_FILTER_SAMPLES] = {};
+static float    s_bufM[OBS_FILTER_SAMPLES] = {};
+static float    s_bufR[OBS_FILTER_SAMPLES] = {};
+static uint8_t  s_bufIdx          = 0;
+static uint8_t  s_stopFrameCount  = 0;
+static uint8_t  s_clearFrameCount = 0;
 
-// ─── Filter state ─────────────────────────────────────────────────────────────
-static float    s_filterBufL[OBS_FILTER_SAMPLES] = {};
-static float    s_filterBufM[OBS_FILTER_SAMPLES] = {};
-static float    s_filterBufR[OBS_FILTER_SAMPLES] = {};
-static uint8_t  s_filterIdx       = 0;
-static uint8_t  s_stopFrameCount  = 0;   // consecutive frames in STOP zone
-static uint8_t  s_clearFrameCount = 0;   // consecutive frames outside STOP zone
+// ─── Median over a fixed-size buffer ─────────────────────────────────────────
+// Copies into a scratch array and insertion-sorts (cheap for N=5).
+static inline float medianOfN(const float* buf) {
+    float tmp[OBS_FILTER_SAMPLES];
+    memcpy(tmp, buf, sizeof(tmp));
 
-// ─── Median of 3 (spike rejection) ───────────────────────────────────────────
-// Removes single outlier spikes before they enter the rolling average.
-static inline float medianOf3(float a, float b, float c) {
-    if (a > b) { float t = a; a = b; b = t; }
-    if (b > c) { float t = b; b = c; c = t; }
-    if (a > b) { float t = a; a = b; b = t; }
-    return b;  // middle value
+    for (int i = 1; i < OBS_FILTER_SAMPLES; i++) {
+        float key = tmp[i];
+        int j = i - 1;
+        while (j >= 0 && tmp[j] > key) {
+            tmp[j + 1] = tmp[j];
+            j--;
+        }
+        tmp[j + 1] = key;
+    }
+    return tmp[OBS_FILTER_SAMPLES / 2];
 }
-
-// ─── Rolling average over ring buffer ────────────────────────────────────────
-static inline float rollingAvg(float* buf, uint8_t newVal) {
-    buf[s_filterIdx] = newVal;
-    float sum = 0;
-    for (int i = 0; i < OBS_FILTER_SAMPLES; i++) sum += buf[i];
-    return sum / OBS_FILTER_SAMPLES;
-}
-
 
 // ─── HC-SR04 single measurement ──────────────────────────────────────────────
 static inline float readSonar(uint8_t trigPin, uint8_t echoPin) {
@@ -96,7 +95,6 @@ static inline float readSonar(uint8_t trigPin, uint8_t echoPin) {
     return (cm > DIST_MAX) ? DIST_MAX : cm;
 }
 
-
 // ─── Obstacle classifier ─────────────────────────────────────────────────────
 static inline ObstacleLocation classifyObstacle(float dL, float dM, float dR) {
     constexpr float COS30 = 0.866f;
@@ -106,7 +104,7 @@ static inline ObstacleLocation classifyObstacle(float dL, float dM, float dR) {
 
     uint8_t bits = OBS_NONE;
     if (fwdL < DIST_STOP * 0.7f) bits |= OBS_LEFT;
-    if (fwdM < DIST_STOP) bits |= OBS_MIDDLE;
+    if (fwdM < DIST_STOP)        bits |= OBS_MIDDLE;
     if (fwdR < DIST_STOP * 0.7f) bits |= OBS_RIGHT;
 
     return static_cast<ObstacleLocation>(bits);
@@ -114,46 +112,66 @@ static inline ObstacleLocation classifyObstacle(float dL, float dM, float dR) {
 
 // ─── FreeRTOS sensor task ─────────────────────────────────────────────────────
 static void sensorTask(void* pvParams) {
-    const uint8_t trigPins[] = { SONAR_L_TRIG, SONAR_M_TRIG, SONAR_R_TRIG };
-    const uint8_t echoPins[] = { SONAR_L_ECHO, SONAR_M_ECHO, SONAR_R_ECHO };
+    pinMode(SONAR_L_TRIG, OUTPUT); digitalWrite(SONAR_L_TRIG, LOW);
+    pinMode(SONAR_M_TRIG, OUTPUT); digitalWrite(SONAR_M_TRIG, LOW);
+    pinMode(SONAR_R_TRIG, OUTPUT); digitalWrite(SONAR_R_TRIG, LOW);
 
-    for (int i = 0; i < 3; i++) {
-        pinMode(trigPins[i], OUTPUT);
-        pinMode(echoPins[i], INPUT);
-        digitalWrite(trigPins[i], LOW);
-    }
+    pinMode(SONAR_L_ECHO, INPUT);
+    pinMode(SONAR_M_ECHO, INPUT);
+    pinMode(SONAR_R_ECHO, INPUT);
 
-    // Pre-fill rolling average buffers with DIST_MAX so the robot
-    // doesn't false-trigger on startup before buffers are populated
+    // Pre-fill buffers with DIST_MAX so the robot starts in a "clear" state
     for (int i = 0; i < OBS_FILTER_SAMPLES; i++) {
-        s_filterBufL[i] = DIST_MAX;
-        s_filterBufM[i] = DIST_MAX;
-        s_filterBufR[i] = DIST_MAX;
+        s_bufL[i] = DIST_MAX;
+        s_bufM[i] = DIST_MAX;
+        s_bufR[i] = DIST_MAX;
     }
 
     for (;;) {
-        // ─── Stage 1: 3 reads per sensor for median spike rejection ──────────
-        float rawL = readSonar(SONAR_L_TRIG, SONAR_L_ECHO); vTaskDelay(pdMS_TO_TICKS(10));
-        float rawM = readSonar(SONAR_M_TRIG, SONAR_M_ECHO); vTaskDelay(pdMS_TO_TICKS(10));
-        float rawR = readSonar(SONAR_R_TRIG, SONAR_R_ECHO); vTaskDelay(pdMS_TO_TICKS(10));
+        // ─── One read per sensor per iteration ────────────────────────────────
+        float rawL = readSonar(SONAR_L_TRIG, SONAR_L_ECHO);
+        vTaskDelay(pdMS_TO_TICKS(10));   // gap to avoid cross-talk
+        float rawM = readSonar(SONAR_M_TRIG, SONAR_M_ECHO);
+        vTaskDelay(pdMS_TO_TICKS(10));
+        float rawR = readSonar(SONAR_R_TRIG, SONAR_R_ECHO);
+        vTaskDelay(pdMS_TO_TICKS(10));
 
-  
+        // ─── Push into ring buffers ────────────────────────────────────────────
+        s_bufL[s_bufIdx] = rawL;
+        s_bufM[s_bufIdx] = rawM;
+        s_bufR[s_bufIdx] = rawR;
+        s_bufIdx = (s_bufIdx + 1) % OBS_FILTER_SAMPLES;
 
-        // ─── Stage 3: confirmation frames ────────────────────────────────────
-        ObstacleLocation loc = classifyObstacle(rawL, rawM, rawR);
-        bool hardStop = (loc != OBS_NONE);
+        // ─── Filter: median over the last OBS_FILTER_SAMPLES readings ─────────
+        float dL = medianOfN(s_bufL);
+        float dM = medianOfN(s_bufM);
+        float dR = medianOfN(s_bufR);
 
+        // ─── Confirmation frames (debounce state transitions) ─────────────────
+        ObstacleLocation loc = classifyObstacle(dL, dM, dR);
+        bool rawHardStop = (loc != OBS_NONE);
+
+        bool hardStop;
+        if (rawHardStop) {
+            s_stopFrameCount  = min((int)s_stopFrameCount  + 1, (int)OBS_CONFIRM_FRAMES);
+            s_clearFrameCount = 0;
+            hardStop = (s_stopFrameCount >= OBS_CONFIRM_FRAMES);
+        } else {
+            s_clearFrameCount = min((int)s_clearFrameCount + 1, (int)OBS_CONFIRM_FRAMES);
+            s_stopFrameCount  = 0;
+            hardStop = !(s_clearFrameCount >= OBS_CONFIRM_FRAMES);
+        }
 
         // ─── Warn zone (only meaningful when not in hard stop) ────────────────
         bool warn = false;
         if (!hardStop) {
             constexpr float COS30 = 0.866f;
-            warn = (rawL * COS30 < DIST_WARN) ||
-                   (rawM        < DIST_WARN) ||
-                   (rawR * COS30 < DIST_WARN);
+            warn = (dL * COS30 < DIST_WARN) ||
+                   (dM        < DIST_WARN) ||
+                   (dR * COS30 < DIST_WARN);
         }
 
-        // ─── Edge-triggered callbacks ─────────────────────────────────────────
+        // ─── Edge-triggered callbacks ───────────────────────────────────────────
         if (hardStop && !s_wasInStop) {
             if (s_motorStop != nullptr) s_motorStop();
         } else if (!hardStop && s_wasInStop) {
@@ -161,11 +179,11 @@ static void sensorTask(void* pvParams) {
         }
         s_wasInStop = hardStop;
 
-        // ─── Update shared state ──────────────────────────────────────────────
+        // ─── Update shared state ────────────────────────────────────────────────
         if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(5)) == pdTRUE) {
-            s_reading.distL     = rawL;
-            s_reading.distM     = rawM;
-            s_reading.distR     = rawR;
+            s_reading.distL     = dL;
+            s_reading.distM     = dM;
+            s_reading.distR     = dR;
             s_reading.location  = loc;
             s_reading.hardStop  = hardStop;
             s_reading.warn      = warn;
@@ -224,17 +242,15 @@ static inline void obstacleDetection_update() {
 
     SensorReading r = obstacleDetection_getReading();
 
-    ble.send("M:"+String(r.distM));
-
     // "OBS|L:24.3|M:310.0|R:18.7|STOP:1"
-    // char buf[48];
-    // snprintf(buf, sizeof(buf),
-    //     "OBS|L:%.1f|M:%.1f|R:%.1f|STOP:%d",
-    //     r.distL,
-    //     r.distM,
-    //     r.distR,
-    //     r.hardStop ? 1 : 0
-    // );
+    char buf[48];
+    snprintf(buf, sizeof(buf),
+        "OBS|L:%.1f|M:%.1f|R:%.1f|STOP:%d",
+        r.distL,
+        r.distM,
+        r.distR,
+        r.hardStop ? 1 : 0
+    );
 
-    // ble.send(buf);
+    ble.send(buf);
 }

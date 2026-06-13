@@ -39,17 +39,14 @@ EXIT_WORD = "thank you"
 VOICE = "mb-en1"
 SPEED = "100"
 
-<<<<<<< HEAD
-listenForCommand = True
-=======
 listenForCommand = False
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
 
 # ----------------- TTS (Unified) -----------------
 engine = None
 if platform != "RPI":
     engine = pyttsx3.init()
 
+# espeak -v mb-en1 -s 100 "Hello, world"
 def speak(text):
     print(f"[TTS]: {text}")
 
@@ -89,14 +86,8 @@ def handle_speak(data):
     
 def handle_command_listen(data):
     global listenForCommand
-<<<<<<< HEAD
-    action = data.get("action")
-    if action:
-        listenForCommand = action == "listen"
-=======
     if data["action"]:
         listenForCommand = data["action"] == "listen"
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
     
     
 node.subscribe("voice/speak",handle_speak)

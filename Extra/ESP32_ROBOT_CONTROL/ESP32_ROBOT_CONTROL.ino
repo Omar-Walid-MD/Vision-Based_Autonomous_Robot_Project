@@ -1,17 +1,20 @@
 #include "globals.h"
 #include <ble.h>
 #include "HoverboardController.h"
-#include "RotationSensor.h"
 // #include "ObstacleDetection.h"
 
-
-
 bool canMoveForward = true;
+bool piActive = false;
 
-int batSendInterval =  10 * 1000;
+
+int batSendInterval =  5 * 1000;
 unsigned long batSendLast = 0;
 
 // -------- PIN CONFIG --------
+
+#define VBAT 4
+#define LATCH 14
+#define SWITCH_IN 10
 
 // Serial1 → Board A + shared TX
 #define RX1_PIN 18
@@ -21,13 +24,16 @@ unsigned long batSendLast = 0;
 #define RX2_PIN 16
 #define TX2_UNUSED -1
 
-#define IMU_TOGGLE 19
-
 
 BLEModule ble;
 
-RotationSensor imu(ble);
-HoverboardController hover(Serial1, Serial2, ble, imu);
+HoverboardController hover(Serial1, Serial2, ble);
+
+volatile bool shutdownRequested = false;
+
+void ICACHE_RAM_ATTR buttonISR() {
+  shutdownRequested = true;
+}
 
 void onObstacleStop() {
    
@@ -45,31 +51,14 @@ void onObstacleClear() {
 }
 
 
-void handleSerialInput(String cmd) {
+void handleBluetoothInput(String cmd) {
     if (cmd.length() == 0) return;
 
     cmd.toLowerCase();
 
 
-    // IMU commands
-
-    if (cmd == "cc") {
-      if(startIMU) imu.calibrateCompass(true);
-    }
-    else if (cmd == "cg") {
-      if(startIMU) imu.calibrateGyro(true);
-    }
-    else if (cmd == "z") {
-      if(startIMU)
-      {
-        imu.setZeroHeading();
-        ble.send("Zero heading set! Current direction is now 0°.");
-      }
-    }
-
-    // hover switch commands
-
-    else if(cmd == "on")
+    // commands
+    if(cmd == "on")
     {
       hover.on();
     }
@@ -164,18 +153,12 @@ void handleSerialInput(String cmd) {
         hover.startPath(cmds, cmdCount);
     }
 
-    // paramater setting commands
+    // parameter setting commands
 
     else if(cmd.startsWith("kp"))
     {
       float val = cmd.substring(2).toFloat();
       hover.setKP(val);
-    }
-
-    else if(cmd.startsWith("ky"))
-    {
-      float val = cmd.substring(2).toFloat();
-      hover.setKYaw(val);
     }
 
     else if(cmd.startsWith("lb"))
@@ -352,7 +335,88 @@ void handleSerialInput(String cmd) {
   }
 }
 
+void handleSerialInput(String cmd) {
+    if (cmd.length() == 0) return;
+
+    cmd.toLowerCase();
+
+    if(cmd == "pi-active")
+    {
+      piActive = true;
+    }
+
+    if(!piActive) return;
+
+    if (cmd.startsWith("path:"))
+    {
+        String data = cmd.substring(5);
+
+        PathCommand cmds[20];
+
+        int cmdCount = 0;
+
+        while (data.length() > 0 && cmdCount < 20)
+        {
+            int sep = data.indexOf(';');
+
+            String token;
+
+            if (sep >= 0)
+            {
+                token = data.substring(0, sep);
+                data = data.substring(sep + 1);
+            }
+            else
+            {
+                token = data;
+                data = "";
+            }
+
+            int comma = token.indexOf(',');
+
+            if (comma < 0) continue;
+
+            String typeStr = token.substring(0, comma);
+
+            float value =
+                token.substring(comma + 1).toFloat();
+
+            if (typeStr == "m")
+            {
+                cmds[cmdCount++] =
+                {
+                    PATH_MOVE,
+                    value
+                };
+            }
+            else if (typeStr == "r")
+            {
+                cmds[cmdCount++] =
+                {
+                    PATH_ROTATE,
+                    value
+                };
+            }
+        }
+
+        hover.startPath(cmds, cmdCount);
+    }
+
+}
+
 void setup() {
+
+    // set latch to high
+    pinMode(LATCH, OUTPUT);
+    digitalWrite(LATCH, HIGH);
+
+    pinMode(SWITCH_IN, INPUT_PULLUP);
+
+    attachInterrupt(
+      digitalPinToInterrupt(SWITCH_IN),
+      buttonISR,
+      FALLING
+    );
 
     Serial.begin(115200); // debug / Pi
 
@@ -370,28 +434,7 @@ void setup() {
     
     // Your existing motor + LED + BLE setup...
     ble.begin("ESP32_BLE");
-    ble.onReceive = handleSerialInput;
-
-    pinMode(IMU_TOGGLE,INPUT_PULLUP);
-
-    if(!digitalRead(IMU_TOGGLE)) 
-    startIMU = true;
-
-    // Initialize rotation sensors
-    if(startIMU)
-    {
-      if (!imu.begin()) {
-        while(1)
-        {
-          ble.send("IMU initialization failed!");
-          delay(500);
-        }
-      }
-
-      ble.send("Rotation sensors ready.");
-      imu.printCalibration();
-
-    }
+    ble.onReceive = handleBluetoothInput;
 
     batSendLast = millis() - batSendInterval;
 
@@ -401,20 +444,12 @@ void setup() {
 
 void loop() {
 
-    // update IMU
-    if(startIMU)
-    {
-      imu.update();
-    }
-
+    unsigned long now = millis();
 
     // update hover
     hover.update();
 
-
     // update battery
-    unsigned long now = millis();
-
     if(now - batSendLast >= batSendInterval)
     {
       float batVoltage = hover.getBattery();
@@ -427,7 +462,17 @@ void loop() {
       
     }
 
+    if (shutdownRequested) {
+      Serial.println("Shutdown requested");
+
+      delay(100);
+
+      digitalWrite(LATCH, LOW);
+
+      while (true) {
+        delay(1000);
+      }
+    }
 
     // obstacleDetection_update();
-
 }

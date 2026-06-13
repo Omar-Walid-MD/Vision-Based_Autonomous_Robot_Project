@@ -8,7 +8,7 @@ build/
 dist/
 *.egg-info/
 *.zip
-
+test/
 # Ignore Python cache
 __pycache__/
 *.pyc
@@ -21,3 +21,5 @@ calib_images/
 vosk-en-us/
 
 start.json
+max30102/
+voices/

@@ -6,7 +6,6 @@
 #include "util.h"
 #include "hoverserial.h"
 #include "globals.h"
-#include "RotationSensor.h"
 #include <HardwareSerial.h>
 #include <ble.h>
 #include <Preferences.h>
@@ -18,8 +17,8 @@ struct CalibCycle {
   int speed;
 };
 
-#define START_SPEED 90
-#define MINIMUM_SPEED 40
+#define START_SPEED 100
+#define MINIMUM_SPEED 60
 
 #define STALL_TIME 750
 
@@ -35,12 +34,11 @@ public:
     // Constructor: two hardware serials
     HoverboardController(HardwareSerial& serialA,
                          HardwareSerial& serialB,
-                         BLEModule& ble,
-                         RotationSensor& imu)
+                         BLEModule& ble)
         : _serialA(serialA),
           _serialB(serialB),
-          _ble(ble),
-          _imu(imu) {
+          _ble(ble)
+          {
 
             pinMode(HOVER_SWITCH,OUTPUT);
             on();
@@ -320,9 +318,7 @@ public:
 
         _linearTarget = metersToTicks(centimeters / 100.0f);
 
-        if(startIMU) _startYaw   = _imu.getMagYaw();
-
-        leftLinearCal = _cal[0];
+        // leftLinearCal = _cal[0];
 
         brakeTicks = metersToTicks(brakeDistance);
 
@@ -351,7 +347,6 @@ public:
 
         _leftBrakingFactor = 1;
         _rightBrakingFactor = 1;
-        // _yawTarget = _imu.getOffsetMagYaw(degrees);
 
         int32_t ticks = degreesToTurnTicks(degrees);
 
@@ -435,22 +430,6 @@ public:
             // PD correction
             int correction = (int)(error * kP);
 
-            if(startIMU)
-            {
-              // --- yaw correction ---
-              float currentYaw = _imu.getMagYaw();
-              float yawError = currentYaw - _startYaw;
-
-              // handle wrap-around (e.g. 359 -> 1 should be +2, not -358)
-              if (yawError >  180.0f) yawError -= 360.0f;
-              if (yawError < -180.0f) yawError += 360.0f;
-
-              // combine: odometry keeps wheels equal, yaw keeps heading locked
-              correction = (int)(error * kP + yawError * kYaw);
-            }
-
-
-
             _linearSpeedLeft  = _baseSpeedLeft  - correction;
             _linearSpeedRight = _baseSpeedRight + correction;
 
@@ -464,10 +443,6 @@ public:
                 (abs(dl) > abs(dr))
                 ? abs(dl)
                 : abs(dr);
-
-            float t = (float)progress / calibrationFadeTicks;
-            t = constrain(t, 0.0f, 1.0f);
-            leftLinearCal = _cal[0] + (1.0f - _cal[0]) * t;
 
             int32_t remaining = abs(_linearTarget) - progress;
 
@@ -670,7 +645,6 @@ private:
     SerialHover2Server _feedbackB{};
 
     BLEModule& _ble;
-    RotationSensor& _imu;
 
     unsigned long _nextSend = 0;
     unsigned long _sendInterval = 20;
@@ -705,7 +679,7 @@ private:
     float brakeDistance = 0.3f; //meters
 
     int32_t brakeTicks = metersToTicks(brakeDistance);
-    int32_t calibrationFadeTicks = metersToTicks(0.15f); // first 15 cm
+    // int32_t calibrationFadeTicks = metersToTicks(0.15f); // first 15 cm
 
     float leftBrakingFactorConstant = 0.75f;
     float leftLinearCal = 1.0f;
@@ -783,44 +757,44 @@ private:
         return (int32_t)ticks;
     }
 
-    void handleStall()
-    {
-      uint32_t now = millis();
+    // void handleStall()
+    // {
+    //   uint32_t now = millis();
 
-      // LEFT MOTOR
-      if (abs(_speedLeft) > MINIMUM_SPEED && abs(_feedbackA.iSpeed/10) < 50)
-      {
-          if (_leftStallStart == 0)
-              _leftStallStart = now;
+    //   // LEFT MOTOR
+    //   if (abs(_speedLeft) > MINIMUM_SPEED && abs(_feedbackA.iSpeed/10) < 50)
+    //   {
+    //       if (_leftStallStart == 0)
+    //           _leftStallStart = now;
 
-          if (now - _leftStallStart > STALL_TIME)
-          {
-              _ble.send("Left Stall");
-              stopMotion();
-          }
-      }
-      else
-      {
-          _leftStallStart = 0;
-      }
+    //       if (now - _leftStallStart > STALL_TIME)
+    //       {
+    //           _ble.send("Left Stall");
+    //           stopMotion();
+    //       }
+    //   }
+    //   else
+    //   {
+    //       _leftStallStart = 0;
+    //   }
 
-      // RIGHT MOTOR
-      if (abs(_speedRight) > MINIMUM_SPEED && abs(_feedbackB.iSpeed/10) < 50)
-      {
-          if (_rightStallStart == 0)
-              _rightStallStart = now;
+    //   // RIGHT MOTOR
+    //   if (abs(_speedRight) > MINIMUM_SPEED && abs(_feedbackB.iSpeed/10) < 50)
+    //   {
+    //       if (_rightStallStart == 0)
+    //           _rightStallStart = now;
 
-          if (now - _rightStallStart > STALL_TIME)
-          {
-              _ble.send("Right Stall");
-              stopMotion();
-          }
-      }
-      else
-      {
-          _rightStallStart = 0;
-      }
-    }
+    //       if (now - _rightStallStart > STALL_TIME)
+    //       {
+    //           _ble.send("Right Stall");
+    //           stopMotion();
+    //       }
+    //   }
+    //   else
+    //   {
+    //       _rightStallStart = 0;
+    //   }
+    // }
 };
 
 

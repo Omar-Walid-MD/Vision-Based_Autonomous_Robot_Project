@@ -5,15 +5,12 @@
 #include <gst/app/gstappsink.h>
 #include <gst/app/gstappsrc.h>
 #include <signal.h>
-<<<<<<< HEAD
-=======
 #include <unordered_map>
 #include <vector>
 #include <nlohmann/json.hpp>
 #include <filesystem>
 
 #include "Node.h"
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
 
 extern "C" {
 #include <apriltag/apriltag.h>
@@ -25,8 +22,6 @@ extern "C" {
 using namespace cv;
 using namespace std;
 
-<<<<<<< HEAD
-=======
 struct TagData
 {
     int id;
@@ -50,7 +45,6 @@ const int TAG_APPROVED_COUNT = 3;
 
 SocketNode my_node = SocketNode("camera0");
 
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
 // ==========================
 // Rotation Matrix to Euler
 // ==========================
@@ -262,10 +256,7 @@ int main(int argc, char* argv[])
     // ==========================================
     // Camera calibration
     // ==========================================
-<<<<<<< HEAD
-    FileStorage fs("camera_calib.yaml", FileStorage::READ);
 
-=======
     std::filesystem::path exe_path =
         std::filesystem::canonical(argv[0]).parent_path();
 
@@ -276,7 +267,7 @@ int main(int argc, char* argv[])
               << calib_path << std::endl;
 
     FileStorage fs(calib_path.string(), FileStorage::READ);
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
+
     Mat cameraMatrix, distCoeffs;
 
     fs["camera_matrix"] >> cameraMatrix;
@@ -385,28 +376,19 @@ int main(int argc, char* argv[])
 
         zarray_t *detections =
             apriltag_detector_detect(td, &im);
-<<<<<<< HEAD
-=======
             
         std::vector<TagData> detected_tags;
         std::vector<int> detected_tag_ids;
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
 
         for (int i = 0; i < zarray_size(detections); i++)
         {
             apriltag_detection_t *det;
 
             zarray_get(detections, i, &det);
-<<<<<<< HEAD
-=======
             
-            int marker_id = det->id;
-
             detected_tag_ids.push_back(marker_id);
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
 
             apriltag_detection_info_t info;
-
             info.det     = det;
             info.tagsize = tag_size;
             info.fx      = fx;
@@ -458,8 +440,6 @@ int main(int argc, char* argv[])
                  << endl;
 
             cout << "------------------------" << endl;
-<<<<<<< HEAD
-=======
             
             if (tag_frame_count.count(marker_id))
             {
@@ -501,7 +481,6 @@ int main(int argc, char* argv[])
             {
                 tag_frame_count[marker_id] = 1;
             }
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
 
             if (show)
             {
@@ -627,8 +606,6 @@ int main(int argc, char* argv[])
                 );
             }
         }
-<<<<<<< HEAD
-=======
         
         // ==========================================
         // Send tags if detected
@@ -705,7 +682,6 @@ int main(int argc, char* argv[])
         {
             tag_frame_count.erase(id);
         }
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
 
         apriltag_detections_destroy(detections);
         

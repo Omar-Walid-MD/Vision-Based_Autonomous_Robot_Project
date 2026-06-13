@@ -25,9 +25,8 @@ controls_keyup = {"w": "S", "a": "S", "s": "S", "d": "S", "m": "S", "n": "S"}
 
 parameters = [
     {"key": "kp", "label": "K Proportional", "value": ""},
-    {"key": "ki", "label": "K Integral", "value": ""},
-    {"key": "kd", "label": "K Derivative", "value": ""},
-    {"key": "ms", "label": "Max Speed", "value": ""},
+    {"key": "bd", "label": "Brake Distance", "value": ""},
+    {"key": "lb", "label": "Left Braking Factor", "value": ""},
 ]
 
 # -----------------------------
@@ -442,11 +441,14 @@ class RobotRemoteApp(ctk.CTk):
         if key in self.pressed_keys:
             return
         self.pressed_keys.add(key)
-
+        
         if self.input_entry.focus_get() == self.input_entry._entry:
             if key == "return":
                 self.send_text_input()
             return
+        
+        if key == "slash":
+            self.input_entry._entry.focus_set()
 
         if key in controls:
             self.send_ble(controls[key])
@@ -482,6 +484,8 @@ class RobotRemoteApp(ctk.CTk):
             self.history_index = len(self.command_history)
 
             self.input_entry.delete(0, "end")
+            
+            self.focus_set()
             
     def history_up(self, event=None):
         if not self.command_history:

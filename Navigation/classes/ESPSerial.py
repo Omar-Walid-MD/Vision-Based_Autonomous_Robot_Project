@@ -18,6 +18,7 @@ MSG_MOVE_COMPLETED = 0x01
 MSG_BATTERY   = 0x02
 MSG_NAV       = 0x03
 MSG_RECHARGING = 0x04
+MSG_OBSTACLE = 0x05
 
 
 MSG_STOP = "stop"
@@ -99,6 +100,11 @@ class ESPSerial:
 
                 self.robot.node.send("recharging/status",recharging)
                 print(f"Recharging set to: {recharging}")
+                
+            elif msg_type == MSG_OBSTACLE:
+                data = self.serial.read(2)
+                # get distance of obstacle and orientation
+                
 
             else:
                 print("Unknown message type:", msg_type)

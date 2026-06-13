@@ -15,6 +15,8 @@ import os
 from pathfinding import marginizeGrid
 from queue import Queue
 
+from PIL import Image, ImageDraw
+
 
 this_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -27,8 +29,8 @@ confVars = """
 loadPrcFileData("",confVars)
 
 
-mapDir = "./map"
-robotSize = 0.5
+mapDir = "./map/test/test"
+robotSize = 0
 
 class Simulation(ShowBase):
     def __init__(self,args,node):
@@ -130,7 +132,7 @@ class Simulation(ShowBase):
 
         self.camera_controller = OrbitCamera(base, self.robot)
         
-        self.robot.navigate_to_location("charger")
+        # self.robot.navigate_to_location("charger")
         
     
     def update(self, task):
@@ -149,6 +151,8 @@ class Simulation(ShowBase):
             f"Grid: ({grid_pos[0]}, {grid_pos[1]})\n"
             f"Battery level: {int(self.robot.status.batteryLevel)}%"
         )
+        
+        self.pos_label.hide()
 
         return task.cont
 
@@ -177,10 +181,7 @@ class Simulation(ShowBase):
 
     def sim_to_world(self,sim_coords):
         return [sim_coords[0],-sim_coords[1]]
-    
-                
-                
-    
+
             
     def process_tag_updates(self):
 
@@ -203,6 +204,110 @@ class Simulation(ShowBase):
             print("tag found")
 
         return
+    
+
+
+    def export_path_image(self, grid, start, end, waypoints, filename="path.png", cell_size=20):
+        height = len(grid)
+        width = len(grid[0])
+
+        img = Image.new(
+            "RGB",
+            (width * cell_size, height * cell_size),
+            (255, 255, 255)
+        )
+
+        draw = ImageDraw.Draw(img)
+
+        # Draw grid
+        for y in range(height):
+            for x in range(width):
+
+                color = (255, 255, 255)  # free
+
+                if grid[y][x] == 0:
+                    color = (0, 0, 0)    # obstacle
+
+                x0 = x * cell_size
+                y0 = y * cell_size
+                x1 = x0 + cell_size
+                y1 = y0 + cell_size
+
+                draw.rectangle([x0, y0, x1, y1], fill=color)
+
+        # Draw waypoints
+        for x, y in waypoints:
+
+            x0 = x * cell_size
+            y0 = y * cell_size
+            x1 = x0 + cell_size
+            y1 = y0 + cell_size
+
+            draw.rectangle(
+                [x0, y0, x1, y1],
+                fill=(0, 0, 255)
+            )
+
+        # Draw start
+        sx, sy = start
+        draw.rectangle(
+            [
+                sx * cell_size,
+                sy * cell_size,
+                (sx + 1) * cell_size,
+                (sy + 1) * cell_size
+            ],
+            fill=(0, 255, 0)
+        )
+
+        # Draw end
+        ex, ey = end
+        draw.rectangle(
+            [
+                ex * cell_size,
+                ey * cell_size,
+                (ex + 1) * cell_size,
+                (ey + 1) * cell_size
+            ],
+            fill=(255, 0, 0)
+        )
+
+        # Optional grid lines
+        for x in range(width + 1):
+            draw.line(
+                [(x * cell_size, 0), (x * cell_size, height * cell_size)],
+                fill=(200, 200, 200)
+            )
+
+        for y in range(height + 1):
+            draw.line(
+                [(0, y * cell_size), (width * cell_size, y * cell_size)],
+                fill=(200, 200, 200)
+            )
+            
+        if len(waypoints) >= 2:
+
+            for i in range(len(waypoints) - 1):
+
+                x1, y1 = waypoints[i]
+                x2, y2 = waypoints[i + 1]
+
+                draw.line(
+                    [
+                        (
+                            x1 * cell_size + cell_size / 2,
+                            y1 * cell_size + cell_size / 2
+                        ),
+                        (
+                            x2 * cell_size + cell_size / 2,
+                            y2 * cell_size + cell_size / 2
+                        )
+                    ],
+                    fill=(100, 100, 100),  #gray
+                    width=4
+                )
+
+        img.save(filename)
 
         
         

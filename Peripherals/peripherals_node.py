@@ -2,12 +2,12 @@
 peripherals_node.py - PeripheralsNode: wires all controllers and handles topics.
 
 Vital sensor topics:
-  peripherals/vitals/thermo/start  → triggers one thermo read cycle
-  peripherals/vitals/heart/start   → triggers one heart read cycle
+  peripherals/vitals/thermo/start   triggers one thermo read cycle
+  peripherals/vitals/heart/start    triggers one heart read cycle
 
 Results are published back on:
-  peripherals/vitals/thermo        → { body_temperature_c, room_temperature_c }
-  peripherals/vitals/heart         → { heart_pulse_bpm, oxy_saturation_percent }
+  peripherals/vitals/thermo         { body_temperature_c, room_temperature_c }
+  peripherals/vitals/heart          { heart_pulse_bpm, oxy_saturation_percent }
 """
 
 import logging
@@ -60,7 +60,7 @@ class PeripheralsNode:
 
         if not self.no_vital:
             self.vitals = VitalSensorsReader(self.config, mock=mock)
-            # Wire result callback → publish
+            # Wire result callback publish
             self.vitals.on_result = self.publish
         else:
             logging.warning("Vital sensors disabled (--no-vital).")
@@ -95,14 +95,17 @@ class PeripheralsNode:
     # Vital sensor handlers
     # ---------------------------
     def on_thermo_start(self, data=None):
-        """Start a thermo scan → confirm → sample cycle."""
+        """Request a thermo cycle  state is set immediately, update_thermo()
+        advances it each tick from the main loop."""
         logging.info("Received peripherals/vitals/thermo/start")
-        self.vitals.start_thermo()
+        self.vitals.request_thermo()
 
     def on_heart_start(self, data=None):
-        """Start a heart scan → confirm → sample cycle."""
+        """Request a heart cycle FIFO cleared immediately, update_heart()
+        advances it each tick from the main loop."""
         logging.info("Received peripherals/vitals/heart/start")
-        self.vitals.start_heart()
+        self.vitals.request_heart()
+
 
     # ---------------------------
     # Servo handlers
@@ -140,12 +143,20 @@ class PeripheralsNode:
         while True:
             now = time.time()
 
+            if self.arm:
+                self.arm.update()
                 
+            if self.head:
+                self.head.update()
 
-                self.publish("peripherals/state", state)
-                next_publish = now + self.config.publish_interval_sec
-
+            # Advance each active sensor state machine by one step.
+            # Alternating thermo / heart avoids simultaneous busio + smbus I2C access.
+            if self.vitals:
+                self.vitals.update_thermo()
+                self.vitals.update_heart()
+                
             time.sleep(0.05)
+
 
     # ---------------------------
     # Shutdown

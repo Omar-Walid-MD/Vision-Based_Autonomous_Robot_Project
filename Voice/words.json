@@ -1,0 +1,21 @@
+{
+    "WAKE_WORDS": [
+        "vector", "vector", "viktor", "vicktor",
+        "victa", "vitker", "factor",
+        "victim", "victims", "vectoria", "vectorious",
+        "pictor", "picture"
+    ],
+
+    "GO_COMMAND": ["go","goal","go to", "goto", "goat two", "move", "move to", "head to", "navigate", "navigate to"],
+    "STOP_COMMAND": ["stop","freeze","stopping","pause","wait"],
+    "SPIN_COMMAND": ["spin", "rotate", "turn around"],
+    "STATUS_COMMAND": ["status"],
+
+    "YES_RESPONSE": ["yes", "yeah", "yep", "yup", "sure", "okay", "ok", "alright", "correct", "affirmative", "indeed", "absolutely", "fine", "good", "si", "aye"],
+    "NO_RESPONSE": ["no", "nope", "nah", "negative", "not", "don't", "wrong", "bad", "no no"],
+
+    "EXIT_PHRASES":  [
+        "thank you", "thanks", "thank", "goodbye", "see you", "shut down", "shutdown", "turn off", "exit", "quit",
+        "stop listening", "go to sleep", "sleep", "that is all", "that's all"
+    ]
+}

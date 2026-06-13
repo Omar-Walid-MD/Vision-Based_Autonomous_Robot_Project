@@ -51,6 +51,7 @@ class Robot(NodePath):
         
         self.points = []
         self.point_index = 0
+        self.destination_point = None
         
         self.size = robot_size # meters
         
@@ -77,14 +78,26 @@ class Robot(NodePath):
         x = int(sum(v[0] for v in zone_verts)/len(zone_verts))
         y = int(sum(v[1] for v in zone_verts)/len(zone_verts))
                 
-        self.navigate_to_point([x,y])
+        if not self.navigate_to_point([x,y]):
+            self.scene.node.send("navigation/status",{"status":"failed"})
+            self.scene.node.send("voice/speak",{"text":f"I could not find a path to location {zone_name}. Please try again."})
+        
+        
         
     def navigate_to_point(self,point):
         
         self.points = self.calculate_points(point)
+        
+        self.destination_point = point
         self.point_index = 0
         
+        if len(self.points) == 0:
+            print("Path not found")
+            return False
+        
+        self.scene.node.send("navigation/status",{"status":"running"})
         self.send_move_to_serial()
+        return True
         
     def send_move_to_serial(self):
         
@@ -105,7 +118,8 @@ class Robot(NodePath):
         
         path_string = f"path:r,{rotation_angle};m,{distance_to_target};"
         
-        self.serial.write(path_string)
+        if not self.sim:
+            self.serial.write(path_string)
         
     
     def next_move(self):
@@ -126,6 +140,10 @@ class Robot(NodePath):
             print("reached end of path")
             self.points = []
             self.point_index = 0
+            self.destination_point = None
+            
+            self.scene.node.send("navigation/status",{"status":"done"})
+            self.scene.node.send("voice/speak",{"text":f"Hello, I arrived at my destination."})
             return
         
         
@@ -145,6 +163,9 @@ class Robot(NodePath):
         # show grid if render enabled
         if self.scene.show:
             self.scene.gridVisualizer.pathOverlay.show_path(points)
+            
+        self.scene.export_path_image(self.scene.grid,start,target,points)
+
         
         points = [self.scene.grid_to_sim(p) for p in points] # convert back to simulation space
         points[0] = pos # replace first estimated point with actual position
