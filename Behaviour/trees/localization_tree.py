@@ -43,7 +43,7 @@ class LookForTarget(py_trees.behaviour.Behaviour):
         # BehaviourNode will set localized=True when camera/tag_found arrives
         if self.bb.localized:
             return py_trees.common.Status.SUCCESS
-        return py_trees.common.Status.RUNNING
+        return py_trees.common.Status.FAILURE
 
 
 class AnnounceReady(py_trees.behaviour.Behaviour):
