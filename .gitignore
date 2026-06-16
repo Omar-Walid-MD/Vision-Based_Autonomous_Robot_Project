@@ -21,3 +21,5 @@ calib_images/
 vosk-en-us/
 
 start.json
+
+Voice/main.py
