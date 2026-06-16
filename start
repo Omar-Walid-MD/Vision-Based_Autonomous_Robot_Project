@@ -1,0 +1,59 @@
+#!/bin/bash
+
+SESSION_NAME="MyProject"
+SERVER_DELAY=3
+num=0
+
+command -v jq >/dev/null 2>&1 || {
+    echo "ERROR: jq not installed"
+    exit 1
+}
+
+tmux kill-session -t "$SESSION_NAME" 2>/dev/null
+tmux new-session -d -s "$SESSION_NAME" -n "server"
+tmux source-file .tmux.conf
+
+
+_jq() {
+    echo "${row}" | base64 -d | jq -r "${1}"
+}
+
+# ---- SERVER ----
+row=$(jq -r '.processes[0] | @base64' start.json)
+
+if [ -n "$row" ]; then
+    name=$(_jq '.name')
+    command=$(_jq '.command')
+    start_flag=$(_jq '.start')
+
+    if [ "$start_flag" = "true" ]; then
+        tmux send-keys -t "$SESSION_NAME:0.0" \
+            "source venv/bin/activate && $command" C-m
+    fi
+fi
+
+sleep "$SERVER_DELAY"
+
+# ---- OTHERS ----
+num=1
+
+while read -r row; do
+    [ -z "$row" ] && continue
+
+    name=$(_jq '.name')
+    command=$(_jq '.command')
+    start_flag=$(_jq '.start')
+
+    if [ "$start_flag" != "true" ]; then
+        continue
+    fi
+
+    tmux new-window -t "$SESSION_NAME:$num" -n "$name"
+    tmux send-keys -t "$SESSION_NAME:$num.0" \
+        "source venv/bin/activate && $command" C-m
+
+    num=$((num + 1))
+
+done < <(jq -r '.processes[1:] | .[] | @base64' start.json)
+
+tmux attach -t "$SESSION_NAME"

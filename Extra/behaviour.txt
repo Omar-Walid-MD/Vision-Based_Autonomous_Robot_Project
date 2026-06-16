@@ -1,0 +1,151 @@
+Robot Lifecycle when powered on:
+
+start System
+if not localized:
+    rotate head around
+    if found tag:
+        localized
+    pivot and move around
+
+
+if TASK_SELECTION:
+
+    if queue not empty:
+        pop task out of queue
+        start task
+        speak "starting task (task type and arguments)"
+
+    if empty:
+        become IDLE
+
+if IDLE (task queue empty):
+
+    listen for trigger word
+    if heard trigger word:
+        speak "Yes, how can I help?"
+        wait for command (1 minute timeout)
+
+        if heard task command:
+            decode and validate task
+            if not valid (unknown command):
+                speak "unknown command. please repeat"
+                reset timeout
+                wait for command
+            
+            else:
+                confirm command by speaking (for example: "deliver ITEM_NAME to LOCATION_NAME?")
+
+                if heard "yes":
+                    insert task to queue front
+                    go to TASK_SELECTION
+
+                if heard "no":
+                    speak "please repeat your command"
+                    reset timeout
+                    wait for command
+        
+        if heard "cancel":
+            speak "command canceled"
+            return to idle
+    
+        if timeout:
+            speak "command timeout"
+            return to idle
+    
+
+if TASK_RUNNING:
+    case DELIVERY:
+
+        get path to target
+
+        if not found path:
+            speak "path not found. task failed"
+            return to idle
+
+        if found path:
+            speak "path found. starting navigation"
+            start navigation (Following path and avoiding obstacles handled by navigation node)
+
+            if failed to avoid obstacle (path is blocked):
+                speak "path blocked. aborting mission"
+                return to idle
+
+            if reached target:
+                speak "ITEM_NAME delivery. receive item and say go"
+
+                wait for "go" (timeout 1 minute)
+
+                if heard "go":
+                    speak "delivery was successful"
+                    end task
+
+                if timeout:
+                    speak "time out"
+                    end task
+
+    case FETCH:
+
+        get path to target
+            
+            if not found path:
+                speak "path not found. task failed"
+                return to idle
+
+            if found path:
+                speak "path found. starting navigation"
+                start navigation (Following path and avoiding obstacles handled by navigation node)
+
+                if failed to avoid obstacle (path is blocked):
+                    speak "path blocked. aborting mission"
+                    return to idle
+
+                if reached target:
+                    speak "please fetch ITEM_NAME. place item and say go"
+
+                    wait for "go" (timeout 1 minute)
+
+                    if heard "go":
+                        speak "starting delivery"
+
+                        (SAME STEPS AS DELIVERY TASK HERE)
+
+                    if timeout:
+                        speak "time out"
+                        end task
+                        return to TASK_SELECTION
+
+
+    case PATIENT_CHECKUP:
+        for each patient room:
+            get path to next room
+            start navigation
+            once reached:
+                navigate inside room and find patients
+                for each patient:
+                    move to patient
+                    confirm start of checkup
+                    ask patient to face the camera
+                    move arm to head and read temperature
+                    confirm temperature reading
+                    ask patient to raise hand
+                    move arm to hand and get pulse and oxygen readings
+                    confirm end of checkup
+        
+        once done all rooms:
+            end task
+
+    if battery is below threshold:
+        if task is running:
+            finish task first
+
+        get path to charging station
+        start navigation
+
+        once reached:
+            start recharging
+        
+if recharging:
+    monitor battery level
+    if recharging is completed:
+        disconnect from charger
+        become IDLE

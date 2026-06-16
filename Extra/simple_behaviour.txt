@@ -1,0 +1,148 @@
+start system
+state = LOCALIZING
+current_task = null
+
+LOOP FOREVER:
+
+    # =========================
+    # BATTERY MONITOR (GLOBAL)
+    # =========================
+    if battery < CRITICAL:
+        speak "low battery"
+
+        current_task = null
+
+        path = plan_path(charging_station)
+
+        if path found:
+            state = NAVIGATING_TO_CHARGER
+        else:
+            speak "cannot reach charger"
+
+    # =========================
+    # LOCALIZATION
+    # =========================
+    if state == LOCALIZING:
+
+        rotate head
+
+        if tag found:
+            localized = true
+            speak "localized"
+            state = IDLE
+
+        else:
+            pivot and move
+
+
+    # =========================
+    # IDLE (VOICE INTERACTION)
+    # =========================
+    if state == IDLE:
+
+        listen for trigger word
+
+        if heard trigger word:
+            speak "Yes, how can I help?"
+            start 60s timer
+
+            while timer not expired:
+
+                if heard command:
+                    decode command
+
+                    if invalid:
+                        speak "unknown command, please repeat"
+                        continue
+
+                    if valid (GO_TO_LOCATION):
+                        target = LOCATION_NAME
+                        speak "go to " + target + "?"
+
+                        wait for yes/no
+
+                        if heard "yes":
+                            current_task = {type: GO_TO_LOCATION, target: target}
+                            speak "starting navigation"
+                            state = NAVIGATING
+                            break
+
+                        if heard "no":
+                            speak "please repeat your command"
+                            continue
+
+                if heard "cancel":
+                    speak "command canceled"
+                    break
+
+            if timer expired:
+                speak "command timeout"
+
+
+    # =========================
+    # NAVIGATION TO TARGET
+    # =========================
+    if state == NAVIGATING:
+
+        if not localized:
+            speak "not localized"
+            state = LOCALIZING
+            continue
+
+        path = plan_path(current_position, current_task.target)
+
+        if path not found:
+            speak "path not found"
+            state = IDLE
+            current_task = null
+            continue
+
+        speak "navigating to " + current_task.target
+
+        start path execution
+        no_progress_timer = 0
+
+        while true:
+
+            if reached target:
+                speak "arrived at " + current_task.target
+                state = IDLE
+                current_task = null
+                break
+
+            if no progress for 10 seconds:
+                speak "path blocked, aborting"
+                state = IDLE
+                current_task = null
+                break
+
+
+    # =========================
+    # NAVIGATE TO CHARGER
+    # =========================
+    if state == NAVIGATING_TO_CHARGER:
+
+        start path execution
+
+        while true:
+
+            if reached charging station:
+                speak "charging"
+                state = CHARGING
+                break
+
+            if no progress for 10 seconds:
+                speak "cannot reach charger"
+                break
+
+
+    # =========================
+    # CHARGING
+    # =========================
+    if state == CHARGING:
+
+        monitor battery
+
+        if battery full:
+            speak "charging complete"
+            state = IDLE

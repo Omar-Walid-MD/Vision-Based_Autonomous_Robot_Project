@@ -1,0 +1,37 @@
+This is a template for start.json file that contains the list of processes to start.
+Process object properties:
+"name": name of the process
+"path": path of the process to start
+"start": boolean to start this process or not (used to start only selected processes during testing)
+
+Current "start.json" on the Raspberry Pi:
+{
+    "processes": [
+        {
+            "name": "server",
+            "path": "./Server/server.py",
+            "start": true
+        },
+        {
+            "name": "simulation",
+            "path": "./Simulation/main.py",
+            "start": true
+        },
+        {
+            "name": "camera",
+            "path": "./AprilTag/main.py",
+            "start": true
+        },
+        {
+            "name": "controller-serial",
+            "path": "./ControllerSerial/main.py",
+            "start": true
+        },
+        {
+            "name": "voice",
+            "path": "./Voice/main.py",
+            "start": true
+        }
+        
+    ]
+}
