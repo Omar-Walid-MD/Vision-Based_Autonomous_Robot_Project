@@ -173,6 +173,12 @@ void handleBluetoothInput(String cmd) {
       hover.setBrakeDistance(val);
     }
 
+    else if(cmd.startsWith("bp"))
+    {
+      float val = cmd.substring(2).toFloat();
+      hover.setBrakePercent(val);
+    }
+
     // ---- CHANGE MODES ----
     else if (cmd == "mode2") {
       hover.setMode2();
@@ -345,9 +351,14 @@ void handleSerialInput(String cmd) {
       piActive = true;
     }
 
-    if(!piActive) return;
+    // if(!piActive) return;
 
-    if (cmd.startsWith("path:"))
+    else if(cmd == "spin")
+    {
+      hover.rot(360.0f);
+    }
+
+    else if (cmd.startsWith("path:"))
     {
         String data = cmd.substring(5);
 

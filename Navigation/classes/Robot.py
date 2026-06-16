@@ -146,9 +146,7 @@ class Robot(NodePath):
             self.scene.node.send("voice/speak",{"text":f"Hello, I arrived at my destination."})
             return
         
-        
-        
-        threading.Timer(2,self.send_move_to_serial).start()
+        threading.Timer(3,self.send_move_to_serial).start()
         
 
     def calculate_points(self,target):

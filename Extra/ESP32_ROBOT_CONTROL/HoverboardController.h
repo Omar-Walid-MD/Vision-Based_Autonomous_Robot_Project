@@ -17,13 +17,18 @@ struct CalibCycle {
   int speed;
 };
 
-#define START_SPEED 100
-#define MINIMUM_SPEED 60
+#define START_SPEED 180
+#define MINIMUM_SPEED 70
+
+#define ROTATE_SPEED_S 100
+#define ROTATE_SPEED_L 125
+
+#define MOVE_SPEED 150
 
 #define STALL_TIME 750
 
 #define WHEEL_DIAMETER 0.16f   // meters (example)
-#define WHEEL_BASE 0.465f    // meters (distance between wheels)
+#define WHEEL_BASE 0.53f    // meters (distance between wheels)
 #define TICKS_PER_REV 90      // from hall sensors
 
 #define HOVER_SWITCH 13
@@ -94,7 +99,7 @@ public:
 
       if(_motionState == MOVING)
       {
-        _speedLeft = (int) (_dir[0] * _linearSpeedLeft * _leftBrakingFactor * leftLinearCal);
+        _speedLeft = (int) (_dir[0] * _linearSpeedLeft * leftLinearCal * _leftBrakingFactor);
         _speedRight = (int) (_dir[1] * _linearSpeedRight * _rightBrakingFactor);
       }
       else if(_motionState == ROTATING)
@@ -280,7 +285,13 @@ public:
         if (_pathIndex >= _pathLength)
         {
             stopPath();
-            _ble.send("path_complete");
+            
+            uint8_t packet[1];
+            packet[0] = 0x01;
+            Serial.write(packet,1);
+            Serial.println("(sent stop ack)");
+
+            _ble.send("path complete");
             return;
         }
 
@@ -318,9 +329,9 @@ public:
 
         _linearTarget = metersToTicks(centimeters / 100.0f);
 
-        // leftLinearCal = _cal[0];
-
         brakeTicks = metersToTicks(brakeDistance);
+
+        setSpeed(MOVE_SPEED);
 
         _leftBrakingFactor = 1;
         _rightBrakingFactor = 1;
@@ -350,7 +361,21 @@ public:
 
         int32_t ticks = degreesToTurnTicks(degrees);
 
+        brakeDistance = 0.5f;
+        brakePercent = 0.25f;
+
+        brakeTicks = metersToTicks(brakeDistance);
+
         _turnTarget = ticks;
+
+        if(abs(degrees) >= 180)
+        {
+          setSpeed(ROTATE_SPEED_L);
+        }
+        else
+        {
+          setSpeed(ROTATE_SPEED_S);
+        }
 
         if (degrees > 0)
         {
@@ -362,9 +387,6 @@ public:
           setDirection(LEFT);
           _turnDir = 1;
         }
-
-        int32_t maxBrakeTicks = degreesToTurnTicks(60);
-        brakeTicks = min(maxBrakeTicks,(int32_t) (abs(_turnTarget) * 0.5f));
         
         _motionState = ROTATING;
 
@@ -445,15 +467,47 @@ public:
                 : abs(dr);
 
             int32_t remaining = abs(_linearTarget) - progress;
+            // _moveRampDistance = max((int32_t)1,min(brakeTicks, (int32_t)(abs(_linearTarget) * brakePercent)));
+
+            // // accelerating
+            // if (progress >= 0 && progress < _moveRampDistance)
+            // {
+            //     float f = (float)progress / (float)_moveRampDistance * 0.5;
+            //     _leftBrakingFactor = constrain(0.5f + ((f+0.5) * (_cal[0] - 0.5f)), 0.5f, _cal[0]);
+            //     _rightBrakingFactor = constrain(f+0.5, 0.5f, 1.0f);
+
+            //     setDirection(_dir);
+            // }
+
+            float f = (float)progress / (float)_moveRampDistance;
+
+            float cal;
+
+            // --- extended strong boost phase ---
+            // if (f < 0.3f)
+            // {
+            //     leftLinearCal = _cal[0];   // full calibration boost at start
+            // }
+            // else
+            // {
+            //     float g = (f - 0.3f) / 0.7f;
+            //     g = g * g;       // smooth nonlinear fade
+            //     leftLinearCal = _cal[0] - (_cal[0] - 1.0f) * g;
+            // }
 
             // braking
-            if (remaining <= brakeTicks && remaining > 0)
+            if (remaining <= _moveRampDistance && remaining > 0)
             {
-                float f = (float)remaining / (float)brakeTicks;
+                float f = (float)remaining / (float)_moveRampDistance;
                 _leftBrakingFactor = constrain(f * leftBrakingFactorConstant, 0.15f, 1.0f);
                 _rightBrakingFactor = constrain(f, 0.15f, 1.0f);
 
                 setDirection(_dir);
+            }
+            else
+            {
+              _leftBrakingFactor = 1.0f;
+              _rightBrakingFactor = 1.0f;
             }
 
             if (remaining <= 0)
@@ -486,11 +540,13 @@ public:
 
             int32_t remaining = abs(_turnTarget) - turn;
 
-            if (remaining <= brakeTicks && remaining > 0)
+            _moveRampDistance = max((int32_t)1,min(brakeTicks, (int32_t)(abs(_linearTarget) * brakePercent)));
+
+            if (remaining <= _moveRampDistance && remaining > 0)
             {
-                float f = (float)remaining / (float)brakeTicks;
-                _leftBrakingFactor = constrain(f * leftBrakingFactorConstant, 0.15f, 1.0f);
-                _rightBrakingFactor = constrain(f, 0.15f, 1.0f);
+                float f = (float)remaining / (float)_moveRampDistance * 0.5;
+                _leftBrakingFactor = constrain((f + 0.5) * leftBrakingFactorConstant, 0.5f, 1.0f);
+                _rightBrakingFactor = constrain(f + 0.5, 0.5f, 1.0f);
 
                 setDirection(_dir);
             }
@@ -594,6 +650,11 @@ public:
       brakeDistance = bd;
     }
 
+    void setBrakePercent(float bp)
+    {
+      brakePercent = bp;
+    }
+
     SerialHover2Server getA() const { return _feedbackA; }
     SerialHover2Server getB() const { return _feedbackB; }
 
@@ -677,9 +738,11 @@ private:
     int32_t _lastMotionValue = 0;
 
     float brakeDistance = 0.3f; //meters
+    float brakePercent = 0.25f; //percent
+
+    int32_t _moveRampDistance = 0;
 
     int32_t brakeTicks = metersToTicks(brakeDistance);
-    // int32_t calibrationFadeTicks = metersToTicks(0.15f); // first 15 cm
 
     float leftBrakingFactorConstant = 0.75f;
     float leftLinearCal = 1.0f;
