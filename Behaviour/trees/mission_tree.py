@@ -1,11 +1,8 @@
 import py_trees
 
 
-<<<<<<< HEAD
-=======
 # ── Conditions ───────────────────────────────────────────────────────────────
 
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
 class HasTask(py_trees.behaviour.Behaviour):
 
     def __init__(self):
@@ -37,7 +34,7 @@ class MoveToGoal(py_trees.behaviour.Behaviour):
         self.bb.register_key(key="task_queue", access=py_trees.common.Access.WRITE)
         self.bb.register_key(key="nav_status", access=py_trees.common.Access.READ)
         self.bb.register_key(key="nav_status", access=py_trees.common.Access.WRITE)
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
+
 
     def initialise(self):
         # Called once each time this node becomes RUNNING.
@@ -75,13 +72,6 @@ class MoveToGoal(py_trees.behaviour.Behaviour):
 
 
 class ListenForVoiceCommand(py_trees.behaviour.Behaviour):
-<<<<<<< HEAD
-
-    def __init__(self, node):
-        super().__init__(name="Listen For Voice Command")
-        self._node = node
-        self._cmd_sent = False
-=======
     """
     Tells the voice node to start listening.
     Stays RUNNING until voice/command topic delivers a task to the blackboard.
@@ -91,7 +81,6 @@ class ListenForVoiceCommand(py_trees.behaviour.Behaviour):
         super().__init__(name="Listen For Voice Command")
         self._node       = node
         self._cmd_sent   = False
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
         self.bb = self.attach_blackboard_client(name=self.name)
         self.bb.register_key(key="task_queue", access=py_trees.common.Access.READ)
 
@@ -109,19 +98,7 @@ class ListenForVoiceCommand(py_trees.behaviour.Behaviour):
         return py_trees.common.Status.RUNNING
 
 
-<<<<<<< HEAD
-def create_mission_tree(node):
-    root = py_trees.composites.Selector(name="Mission Selector", memory=False)
 
-    nav_seq = py_trees.composites.Sequence(name="Navigation Task", memory=True)
-    nav_seq.add_children([HasTask(), MoveToGoal(node)])
-
-    idle_seq = py_trees.composites.Sequence(name="Idle Listening", memory=False)
-    idle_seq.add_children([IsNotCharging(), ListenForVoiceCommand(node)])
-
-    root.add_children([nav_seq, idle_seq])
-    return root
-=======
 # ── Tree builder ─────────────────────────────────────────────────────────────
 
 def create_mission_tree(node):
