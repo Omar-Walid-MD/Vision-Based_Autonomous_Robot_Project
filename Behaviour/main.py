@@ -58,7 +58,7 @@ class BehaviourNode(Node):
             "state":             "LOCALIZING",
             "localized":         False,
             "battery_level":     100,
-            "current_task":      None,
+            "task_queue":        [],        # list — acts as a FIFO queue of tasks
             "obstacle_detected": False,
             "nav_status":        "idle",
             "is_charging":       False,
@@ -133,8 +133,11 @@ class BehaviourNode(Node):
         self._bb.nav_status = payload.get("status", "idle")
 
     def _on_voice_command(self, payload):
-        # payload: {"task": <any>}
-        self._bb.current_task = payload.get("task")
+        # payload: {"task": <any>} — append to queue, never overwrite
+        task = payload.get("task")
+        if task is not None:
+            self._bb.task_queue = self._bb.task_queue + [task]  # list concat keeps BB write clean
+            print(f"[Behaviour] Task queued: {task}  (queue length: {len(self._bb.task_queue)})")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
