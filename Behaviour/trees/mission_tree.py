@@ -11,84 +11,65 @@ class HasTask(py_trees.behaviour.Behaviour):
     def __init__(self):
         super().__init__(name="Has Task?")
         self.bb = self.attach_blackboard_client(name=self.name)
-        self.bb.register_key(key="current_task", access=py_trees.common.Access.READ)
+        self.bb.register_key(key="task_queue", access=py_trees.common.Access.READ)
 
     def update(self):
-        if self.bb.current_task is not None:
+        if len(self.bb.task_queue) > 0:
             return py_trees.common.Status.SUCCESS
         return py_trees.common.Status.FAILURE
 
 
-<<<<<<< HEAD
-class IsNotCharging(py_trees.behaviour.Behaviour):
-
-    def __init__(self):
-        super().__init__(name="Is Not Charging?")
-        self.bb = self.attach_blackboard_client(name=self.name)
-        self.bb.register_key(key="is_charging", access=py_trees.common.Access.READ)
-
-    def update(self):
-        if not self.bb.is_charging:
-            return py_trees.common.Status.SUCCESS
-        return py_trees.common.Status.FAILURE
-
-
-class MoveToGoal(py_trees.behaviour.Behaviour):
-
-    def __init__(self, node):
-        super().__init__(name="Move To Goal")
-        self._node = node
-        self._cmd_sent = False
-        self.bb = self.attach_blackboard_client(name=self.name)
-        self.bb.register_key(key="current_task", access=py_trees.common.Access.READ)
-        self.bb.register_key(key="nav_status", access=py_trees.common.Access.READ)
-        self.bb.register_key(key="current_task", access=py_trees.common.Access.WRITE)
-=======
 # ── Actions ──────────────────────────────────────────────────────────────────
 
 class MoveToGoal(py_trees.behaviour.Behaviour):
     """
-    Sends the current task to the navigation node.
-    Stays RUNNING until navigation/status topic reports done or failed.
+    Pops the first task from task_queue, sends it to navigation,
+    and stays RUNNING until navigation/status reports done or failed.
     """
 
     def __init__(self, node):
         super().__init__(name="Move To Goal")
         self._node       = node
         self._cmd_sent   = False
+        self._active_task = None          # task we popped and are currently executing
         self.bb = self.attach_blackboard_client(name=self.name)
-        self.bb.register_key(key="current_task",   access=py_trees.common.Access.READ)
-        self.bb.register_key(key="nav_status",     access=py_trees.common.Access.READ)
-        self.bb.register_key(key="current_task",   access=py_trees.common.Access.WRITE)
+        self.bb.register_key(key="task_queue", access=py_trees.common.Access.READ)
+        self.bb.register_key(key="task_queue", access=py_trees.common.Access.WRITE)
+        self.bb.register_key(key="nav_status", access=py_trees.common.Access.READ)
+        self.bb.register_key(key="nav_status", access=py_trees.common.Access.WRITE)
 >>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
 
     def initialise(self):
-        self._cmd_sent = False
+        # Called once each time this node becomes RUNNING.
+        # Pop the first task from the queue.
+        self._cmd_sent    = False
+        self._active_task = None
+        queue = self.bb.task_queue
+        if queue:
+            self._active_task  = queue[0]
+            self.bb.task_queue = queue[1:]   # pop front
+            self.bb.nav_status = "idle"      # reset so stale "done" doesn't fire instantly
 
     def update(self):
+        if self._active_task is None:
+            # Queue was empty when initialise() ran — shouldn't normally happen
+            return py_trees.common.Status.FAILURE
+
         if not self._cmd_sent:
             self._node.send("navigation/command", {
                 "action": "move_to_goal",
-<<<<<<< HEAD
-                "task": self.bb.current_task,
+                "task":   self._active_task,
             })
             self._cmd_sent = True
 
         status = self.bb.nav_status
         if status == "done":
-            self.bb.current_task = None
-=======
-                "task":   self.bb.current_task,
-            })
-            self._cmd_sent = True
-
-        status = self.bb.nav_status   # updated by BehaviourNode via navigation/status topic
-        if status == "done":
-            self.bb.current_task = None   # clear task when finished
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
+            self.bb.nav_status = "idle"      # reset for next task
+            print(f"[MoveToGoal] Task done: {self._active_task}  (remaining: {len(self.bb.task_queue)})")
             return py_trees.common.Status.SUCCESS
         if status == "failed":
-            self.bb.current_task = None
+            self.bb.nav_status = "idle"
+            print(f"[MoveToGoal] Task failed: {self._active_task}")
             return py_trees.common.Status.FAILURE
         return py_trees.common.Status.RUNNING
 
@@ -112,7 +93,7 @@ class ListenForVoiceCommand(py_trees.behaviour.Behaviour):
         self._cmd_sent   = False
 >>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
         self.bb = self.attach_blackboard_client(name=self.name)
-        self.bb.register_key(key="current_task", access=py_trees.common.Access.READ)
+        self.bb.register_key(key="task_queue", access=py_trees.common.Access.READ)
 
     def initialise(self):
         self._cmd_sent = False
@@ -122,11 +103,8 @@ class ListenForVoiceCommand(py_trees.behaviour.Behaviour):
             self._node.send("voice/command", {"action": "listen"})
             self._cmd_sent = True
 
-<<<<<<< HEAD
-=======
-        # BehaviourNode sets current_task when voice/command topic fires
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
-        if self.bb.current_task is not None:
+        # BehaviourNode appends to task_queue when voice/command topic fires
+        if len(self.bb.task_queue) > 0:
             return py_trees.common.Status.SUCCESS
         return py_trees.common.Status.RUNNING
 
@@ -159,4 +137,3 @@ def create_mission_tree(node):
 
     root.add_children([nav_seq, idle_seq])
     return root
->>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a

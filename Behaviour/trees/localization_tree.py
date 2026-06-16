@@ -61,7 +61,7 @@ class LookForTarget(py_trees.behaviour.Behaviour):
 >>>>>>> 0b57e37d9717749f83a50d66b04c4878df578a8a
         if self.bb.localized:
             return py_trees.common.Status.SUCCESS
-        return py_trees.common.Status.RUNNING
+        return py_trees.common.Status.FAILURE
 
 
 class AnnounceReady(py_trees.behaviour.Behaviour):
