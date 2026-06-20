@@ -7,16 +7,17 @@
 extern BLEModule ble;
 
 // ─── Pin Definitions ──────────────────────────────────────────────────────────
-#define SONAR_L_TRIG    39
-#define SONAR_L_ECHO    40
-#define SONAR_M_TRIG    37
-#define SONAR_M_ECHO    38
-#define SONAR_R_TRIG    7
-#define SONAR_R_ECHO    6
+#define SONAR_L_ECHO    37
+#define SONAR_L_TRIG    38
+
+#define SONAR_M_ECHO    39
+#define SONAR_M_TRIG    40
+
+#define SONAR_R_ECHO    41
+#define SONAR_R_TRIG    42
 
 // ─── Thresholds (cm) ─────────────────────────────────────────────────────────
-#define DIST_STOP          15.0f
-#define DIST_WARN          50.0f
+#define DIST_WARN          80.0f
 #define DIST_MAX           150.0f
 #define SONAR_TIMEOUT_US   8741UL
 
@@ -62,6 +63,9 @@ static float    s_bufR[OBS_FILTER_SAMPLES] = {};
 static uint8_t  s_bufIdx          = 0;
 static uint8_t  s_stopFrameCount  = 0;
 static uint8_t  s_clearFrameCount = 0;
+
+float DIST_STOP = 30.0f;
+
 
 // ─── Median over a fixed-size buffer ─────────────────────────────────────────
 // Copies into a scratch array and insertion-sorts (cheap for N=5).
@@ -253,4 +257,10 @@ static inline void obstacleDetection_update() {
     );
 
     ble.send(buf);
+}
+
+static inline void setDistStop(float dist)
+{
+  DIST_STOP = dist;
+  ble.send("distance updated");
 }

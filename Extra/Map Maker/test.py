@@ -7,10 +7,10 @@ import json
 WINDOW_WIDTH = 1200
 WINDOW_HEIGHT = 750
 DEFAULT_GRID_SIZE = 25
-DEFAULT_SCALE = 20
+DEFAULT_SCALE = 100
 NODE_RADIUS = 6
-SNAP_DISTANCE = 20
-EDGE_SNAP_DISTANCE = 15
+SNAP_DISTANCE = 5
+EDGE_SNAP_DISTANCE = 5
 STRAIGHT_TOLERANCE = 20
 ZONE_CLOSE_DISTANCE = 15
 DEFAULT_ZONE_COLOR = "#9be7ff"
@@ -78,7 +78,7 @@ class SaveLoadMapBuilder:
         # 2. Measurements
         tk.Label(toolbar, text=" | ", bg="#2c3e50", fg="gray").pack(side=tk.LEFT, padx=5)
         
-        self.scale_slider = tk.Scale(toolbar, from_=10, to=100, orient=tk.HORIZONTAL, command=self.update_grid_size, 
+        self.scale_slider = tk.Scale(toolbar, from_=5, to=100, orient=tk.HORIZONTAL, command=self.update_grid_size, 
                          showvalue=1, length=200, bg="#2c3e50", fg="white", highlightthickness=0)
         self.scale_slider.set(DEFAULT_GRID_SIZE)
         self.scale_slider.pack(side=tk.LEFT, padx=2)
@@ -117,40 +117,11 @@ class SaveLoadMapBuilder:
     # --- SAVE & LOAD SYSTEM (NEW) ---
 
     def save_project(self):
-        # 1. Generate Robot Data (Grid, etc.)
         self.canvas.delete("vis_grid")
         active_walls = [w for w in self.walls if w is not None]
-
-        # --- Compute bounding box of all drawn content (for grid clipping) ---
-        content_points = []
-        for n in self.nodes:
-            content_points.append(n['pos'])
-        for obs in self.obstacles:
-            corners = self.get_obstacle_corners(obs['pos'][0], obs['pos'][1],
-                                                 obs['width'], obs['height'], obs['angle'])
-            content_points.extend(corners)
-        for z in self.zones:
-            content_points.extend(z['points'])
-        for t in self.april_tags:
-            if t['wall_idx'] < len(self.walls) and self.walls[t['wall_idx']] is not None:
-                wall = self.walls[t['wall_idx']]
-                p1 = self.nodes[wall['start']]['pos']; p2 = self.nodes[wall['end']]['pos']
-                content_points.append((p1[0] + (p2[0]-p1[0])*t['ratio'],
-                                       p1[1] + (p2[1]-p1[1])*t['ratio']))
-        for o in self.orientations:
-            content_points.append(o['pos'])
-
-        if content_points:
-            all_gx = [p[0] // self.grid_size for p in content_points]
-            all_gy = [p[1] // self.grid_size for p in content_points]
-            grid_offset_gx = int(min(all_gx))
-            grid_offset_gy = int(min(all_gy))
-        else:
-            grid_offset_gx = 0
-            grid_offset_gy = 0
-
-        # --- Rasterize walls ---
         occupied_cells = set()
+        
+        # 1. Rasterize Walls
         for w in active_walls:
             p1 = self.nodes[w['start']]['pos']; p2 = self.nodes[w['end']]['pos']
             dist = int(math.hypot(p2[0]-p1[0], p2[1]-p1[1]))
@@ -158,156 +129,90 @@ class SaveLoadMapBuilder:
             for i in range(dist):
                 t = i / dist
                 curr_x = p1[0] + t * (p2[0] - p1[0]); curr_y = p1[1] + t * (p2[1] - p1[1])
-                c = int(curr_x // self.grid_size) - grid_offset_gx
-                r = int(curr_y // self.grid_size) - grid_offset_gy
+                c = int(curr_x // self.grid_size); r = int(curr_y // self.grid_size)
                 occupied_cells.add((r, c))
 
-        # --- Rasterize obstacles (furniture) ---
+        # 2. Rasterize Furniture (Obstacles)
         for obs in self.obstacles:
             cx, cy = obs['pos']
-            corners = self.get_obstacle_corners(cx, cy, obs['width'], obs['height'], obs['angle'])
-            min_cx = min(c[0] for c in corners); max_cx = max(c[0] for c in corners)
-            min_cy = min(c[1] for c in corners); max_cy = max(c[1] for c in corners)
-            c_min = int(min_cx // self.grid_size) - grid_offset_gx
-            c_max = int(max_cx // self.grid_size) - grid_offset_gx
-            r_min = int(min_cy // self.grid_size) - grid_offset_gy
-            r_max = int(max_cy // self.grid_size) - grid_offset_gy
-            for r in range(r_min, r_max + 1):
-                for c in range(c_min, c_max + 1):
-                    cell_cx = (c + grid_offset_gx + 0.5) * self.grid_size
-                    cell_cy = (r + grid_offset_gy + 0.5) * self.grid_size
-                    if self.point_in_rotated_rect(cell_cx, cell_cy, cx, cy,
-                                                   obs['width'], obs['height'], obs['angle']):
+            w, h = obs['width'], obs['height']
+            
+            # Simple bounding box without clipping
+            min_c = int((cx - w/2) // self.grid_size)
+            max_c = int((cx + w/2) // self.grid_size)
+            min_r = int((cy - h/2) // self.grid_size)
+            max_r = int((cy + h/2) // self.grid_size)
+            
+            for r in range(min_r, max_r + 1):
+                for c in range(min_c, max_c + 1):
+                    # Check intersection with rotated rect
+                    cell_cx = (c + 0.5) * self.grid_size
+                    cell_cy = (r + 0.5) * self.grid_size
+                    if self.point_in_rotated_rect(cell_cx, cell_cy, cx, cy, w, h, obs.get('angle', 0)):
                         occupied_cells.add((r, c))
 
-        # --- Helper: screen-to-world with grid offset ---
-        def screen_to_world_offset(point):
-            gx = point[0] / self.grid_size - grid_offset_gx
-            gy = point[1] / self.grid_size - grid_offset_gy
-            cs = self.grid_size / DEFAULT_SCALE
-            return [round(gx * cs, 4), round(gy * cs, 4)]
-
-        def screen_to_grid_cell_offset(point):
-            gx = int(point[0] // self.grid_size) - grid_offset_gx
-            gy = int(point[1] // self.grid_size) - grid_offset_gy
-            return [gx, gy]
-
-        # --- Build full matrix (with offset), then clip ---
-        full_rows = WINDOW_HEIGHT // self.grid_size; full_cols = WINDOW_WIDTH // self.grid_size
-        full_matrix = [[1 for _ in range(full_cols)] for _ in range(full_rows)]
+        # Full Canvas Grid (No Clipping)
+        rows = WINDOW_HEIGHT // self.grid_size
+        cols = WINDOW_WIDTH // self.grid_size
+        matrix = [[1 for _ in range(cols)] for _ in range(rows)]
         for r, c in occupied_cells:
-            if 0 <= r < full_rows and 0 <= c < full_cols: full_matrix[r][c] = 0
-
-        # Clip to drawn content bounds
-        if content_points:
-            max_gx = int(max(all_gx)); max_gy = int(max(all_gy))
-        else:
-            max_gx = full_cols - 1; max_gy = full_rows - 1
-        clip_rows = max_gy - grid_offset_gy + 1
-        clip_cols = max_gx - grid_offset_gx + 1
-        matrix = [full_matrix[grid_offset_gy + r][grid_offset_gx:grid_offset_gx + clip_cols]
-                  for r in range(clip_rows)]
+            if 0 <= r < rows and 0 <= c < cols: matrix[r][c] = 0 
             
-    
         def compute_tag_angle(p1, p2, side):
             dx = p2[0] - p1[0]
-            dy = -(p2[1] - p1[1])  # 🔥 FIX: invert Y
-
+            dy = -(p2[1] - p1[1])
             angle = math.atan2(dy, dx)
-
-            if side == 1:
-                angle += math.pi / 2
-            else:
-                angle -= math.pi / 2
-
+            if side == 1: angle += math.pi / 2
+            else: angle -= math.pi / 2
             angle_deg = math.degrees(angle)
             angle_deg = (angle_deg + 360) % 360
-
             return angle_deg - 180
         
-        # 2. Prepare Export Data (For Robot)
+        # Prepare Robot Tags
         robot_tags = []
         for t in self.april_tags:
-            if t['wall_idx'] >= len(self.walls):
-                continue
             wall = self.walls[t['wall_idx']]
-            if wall is None:
-                continue
+            if wall is None: continue
             p1 = self.nodes[wall['start']]['pos']; p2 = self.nodes[wall['end']]['pos']
             nx = p1[0] + (p2[0]-p1[0])*t['ratio']; ny = p1[1] + (p2[1]-p1[1])*t['ratio']
             angle = compute_tag_angle(p1,p2,t["side"])
             robot_tags.append({
                 "id": t['tag_num'],
                 "angle": angle,
-                "pos_meter": screen_to_world_offset((nx, ny))
+                "pos_meter": [round((nx)/DEFAULT_SCALE, 4), round((ny)/DEFAULT_SCALE, 4)]
             })
 
+        # Prepare Robot Zones (Grid Vertices + Orientation inside Zone)
         robot_zones = []
         for z in self.zones:
-            cell_pts = [screen_to_grid_cell_offset(p) for p in z['points']]
-            zone_data = {"name": z['name'], "cells": cell_pts, "color": z['color']}
-            
-            for o in self.orientations:
-                if o['zone_uid'] == z['uid']:
-                    zone_data["orientation"] = {
-                        "cell": screen_to_grid_cell_offset(o['pos']),
-                        "angle_degrees": round(o['angle_degrees'], 2)
-                    }
-                    break
-            
+            grid_pts = [[int(p[0]//self.grid_size), int(p[1]//self.grid_size)] for p in z['points']]
+            zone_data = {"name": z['name'], "vertices_grid": grid_pts, "color": z.get('color', DEFAULT_ZONE_COLOR)}
+            if 'orientation' in z:
+                zone_data['orientation'] = z['orientation']
             robot_zones.append(zone_data)
 
+        # Editor State
         editor_tags = []
         for t in self.april_tags:
             dense_idx = self.get_real_wall_index(t['wall_idx'])
-            if dense_idx < 0:
-                continue
+            if dense_idx < 0: continue
             editor_tags.append({"wall_idx": dense_idx, "ratio": t['ratio'], "side": t['side'], "id": t['tag_num']})
 
-        # 3. Prepare EDITOR STATE (For Loading Back)
         editor_state = {
             "grid_size": self.grid_size,
-            "nodes": [n['pos'] for n in self.nodes],
-            "walls": [{"start": w['start'], "end": w['end']} for w in self.walls if w is not None],
+            "nodes": [n['pos'] for n in self.nodes], 
+            "walls": [{"start": w['start'], "end": w['end']} for w in self.walls if w is not None], 
             "tags": editor_tags,
-            "zones": [
-                {
-                    "uid": z['uid'],
-                    "name": z['name'],
-                    "points": [[p[0], p[1]] for p in z['points']],
-                    "color": z['color']
-                }
-                for z in self.zones
-            ],
-            "orientations": [
-                {
-                    "type": "bed_orientation",
-                    "zone_uid": o['zone_uid'],
-                    "pos": [o['pos'][0], o['pos'][1]],
-                    "angle_degrees": o['angle_degrees'],
-                    "length": o['length']
-                }
-                for o in self.orientations
-            ],
-            "obstacles": [
-                {
-                    "pos": [obs['pos'][0], obs['pos'][1]],
-                    "width": obs['width'],
-                    "height": obs['height'],
-                    "angle": obs['angle']
-                }
-                for obs in self.obstacles
-            ]
+            "zones": [{"name": z['name'], "points": z['points'], "orientation": z.get('orientation', None), "color": z.get('color', DEFAULT_ZONE_COLOR)} for z in self.zones],
+            "obstacles": [{"pos": o['pos'], "width": o['width'], "height": o['height'], "angle": o.get('angle', 0)} for o in self.obstacles]
         }
 
-        # Combine Everything
-        cell_size = self.grid_size / DEFAULT_SCALE
         final_json = {
             "metadata": {"grid_size": self.grid_size, "default_scale": DEFAULT_SCALE},
-            "editor_state": editor_state,
-            "robot_data": {
-                "cell_size": cell_size,
-                "map_origin": [grid_offset_gx * cell_size, grid_offset_gy * cell_size],
+            "editor_state": editor_state, 
+            "robot_data": {               
+                "cell_size": self.grid_size / DEFAULT_SCALE,
+                "map_origin": [0.0, 0.0],
                 "grid": matrix,
                 "tags": robot_tags,
                 "zones": robot_zones
@@ -317,20 +222,9 @@ class SaveLoadMapBuilder:
         file_path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("Robot Map JSON", "*.json")])
         if file_path:
             with open(file_path, 'w') as f: json.dump(final_json, f, indent=4)
-            
-            # 2. Generate OBJ path (same name)
             obj_path = file_path.replace(".json", ".obj")
-
-            # 3. Call the generator
-            if editor_state["nodes"] and editor_state["walls"]:
-                self.generate_obj_from_editor(
-                    file_path,
-                    obj_path,
-                    wall_height=2,
-                    wall_thickness=0.01
-                )
-            messagebox.showinfo("Saved", "Project saved successfully!")
-            
+            self.generate_obj_from_editor(file_path, obj_path, wall_height=2, wall_thickness=0.01)
+            messagebox.showinfo("Saved", "Project saved successfully!")       
 
     def generate_obj_from_editor(self, json_path, obj_path,
                                 wall_height=1.2,
@@ -475,11 +369,12 @@ class SaveLoadMapBuilder:
             b = [[wc[0], y_bot, wc[1]] for wc in world_corners]
             t = [[wc[0], y_top, wc[1]] for wc in world_corners]
 
-            add_quad(b[0], b[1], b[2], b[3])  # bottom
-            add_quad(t[0], t[3], t[2], t[1])  # top
+            add_quad(b[3], b[2], b[1], b[0])  # bottom
+            add_quad(t[1], t[2], t[3], t[0])  # top
             for i in range(4):
                 ni = (i + 1) % 4
-                add_quad(b[i], t[i], t[ni], b[ni])  # sides
+                # add_quad(b[i], t[i], t[ni], b[ni])  # sides
+                add_quad(b[ni], t[ni], t[i], b[i])  # sides
 
         # -------------------------
         # Ground plane

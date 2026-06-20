@@ -18,12 +18,11 @@ struct CalibCycle {
 };
 
 #define START_SPEED 180
-#define MINIMUM_SPEED 70
+#define MINIMUM_SPEED 65
 
-#define ROTATE_SPEED_S 100
-#define ROTATE_SPEED_L 125
+#define ROTATE_SPEED 125
 
-#define MOVE_SPEED 150
+#define MOVE_SPEED 180
 
 #define STALL_TIME 750
 
@@ -31,7 +30,7 @@ struct CalibCycle {
 #define WHEEL_BASE 0.53f    // meters (distance between wheels)
 #define TICKS_PER_REV 90      // from hall sensors
 
-#define HOVER_SWITCH 13
+#define HOVER_SWITCH 10
 
 
 class HoverboardController {
@@ -331,7 +330,7 @@ public:
 
         brakeTicks = metersToTicks(brakeDistance);
 
-        setSpeed(MOVE_SPEED);
+        // setSpeed(MOVE_SPEED);
 
         _leftBrakingFactor = 1;
         _rightBrakingFactor = 1;
@@ -361,21 +360,14 @@ public:
 
         int32_t ticks = degreesToTurnTicks(degrees);
 
-        brakeDistance = 0.5f;
-        brakePercent = 0.25f;
+        // brakeDistance = 1.0f;
+        // brakePercent = 0.35f;
 
         brakeTicks = metersToTicks(brakeDistance);
 
         _turnTarget = ticks;
 
-        if(abs(degrees) >= 180)
-        {
-          setSpeed(ROTATE_SPEED_L);
-        }
-        else
-        {
-          setSpeed(ROTATE_SPEED_S);
-        }
+        // setSpeed(ROTATE_SPEED);
 
         if (degrees > 0)
         {
@@ -716,7 +708,7 @@ private:
     unsigned long _lastAUpdate = 0;
     unsigned long _lastBUpdate = 0;
 
-    float kP = 3.5f;
+    float kP = 4.0f;
 
     int32_t _leftStart = 0;
     int32_t _rightStart = 0;
@@ -744,7 +736,7 @@ private:
 
     int32_t brakeTicks = metersToTicks(brakeDistance);
 
-    float leftBrakingFactorConstant = 0.75f;
+    float leftBrakingFactorConstant = 0.9f;
     float leftLinearCal = 1.0f;
 
     int32_t _totalTicksL = 0;

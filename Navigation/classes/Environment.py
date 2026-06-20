@@ -120,7 +120,7 @@ class Zone(NodePath):
         text.setAlign(TextNode.ACenter)
 
         self.label_np = self.attachNewNode(text)
-        self.label_np.setScale(1)
+        self.label_np.setScale(0.5)
         self.label_np.setPos(cx, cy,0.1)
         self.label_np.setBillboardPointEye()
         self.label_np.setLightOff()

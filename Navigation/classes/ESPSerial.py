@@ -1,6 +1,38 @@
 import serial
 import struct
 from classes.RobotStatus import RobotStatus, NavStatus
+import os
+env = os.environ.copy()
+platform = os.getenv("PLATFORM")
+
+batLed = None
+if(platform == "RPI"):
+    from rpi_ws281x import PixelStrip, Color
+    batLed = PixelStrip(1,18)
+    batLed.begin()
+    
+BATTERY_COLORS = [
+    (90, (0, 255, 0)),      # green
+    (70, (128, 255, 0)),
+    (50, (255, 255, 0)),
+    (30, (255, 128, 0)),
+    (10, (255, 0, 0)),
+    (0,  (128, 0, 0)),
+]
+
+def set_battery_led(percent):
+
+    percent = max(0, min(100, int(percent)))
+    for threshold, color in BATTERY_COLORS:
+        if percent >= threshold:
+            r, g, b = color
+            batLed.setPixelColor(
+                0,
+                Color(r, g, b)
+            )
+            batLed.show()
+            return
+
 """
 pi -> esp:
     - localize: [x,y,r]
@@ -19,7 +51,6 @@ MSG_BATTERY   = 0x02
 MSG_NAV       = 0x03
 MSG_RECHARGING = 0x04
 MSG_OBSTACLE = 0x05
-
 
 MSG_STOP = "stop"
 
@@ -54,29 +85,23 @@ class ESPSerial:
                 return
 
             msg_type = header[0]
-
-            # TRANSFORM
-            # if msg_type == MSG_TRANSFORM:
-            #     data = self.serial.read(12)
-            #     if len(data) < 12:
-            #         return
-
-            #     x, y, r = struct.unpack('<fff', data)
-            #     self.status.transform = [x,y,r]
-            #     print(f"Transform: x={x}, y={y}, r={r}")
             
             if msg_type == MSG_MOVE_COMPLETED:
                 self.robot.next_move()
 
             # BATTERY
             elif msg_type == MSG_BATTERY:
-                data = self.serial.read(4)
-                if len(data) < 4:
+                data = self.serial.read(1)
+                if len(data) < 1:
                     return
 
-                (bat,) = struct.unpack('<f', data)
+                (bat,) = struct.unpack('<B', data)
+
                 self.status.batteryLevel = bat
                 print(f"Battery: {bat}%")
+                
+                if(platform == "RPI"):
+                    set_battery_led(bat)
 
             # NAV STATUS
             elif msg_type == MSG_NAV:
@@ -103,7 +128,23 @@ class ESPSerial:
                 
             elif msg_type == MSG_OBSTACLE:
                 data = self.serial.read(2)
-                # get distance of obstacle and orientation
+
+                if len(data) < 2:
+                    return
+
+                location, distance_cm = struct.unpack('<BB', data)
+
+                distance = distance_cm / 100.0
+
+                self.status.obstacleLocation = location
+                self.status.obstacleDistance = distance
+
+                print(
+                    f"Obstacle: location={location} "
+                    f"distance={distance:.2f}m"
+                )
+
+                self.robot.handle_obstacle(location, distance)
                 
 
             else:
@@ -111,4 +152,3 @@ class ESPSerial:
                 
 
 
-    

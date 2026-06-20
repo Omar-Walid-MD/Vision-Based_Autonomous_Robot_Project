@@ -16,6 +16,17 @@ SIM_ROTATE_SPEED = 180
 BATTERY_SEND_INTERVAL = 10
 BATTERY_SEND_REMAINING = 0
 
+OBS_NAMES = {
+    0b000: "NONE",
+    0b001: "RIGHT",
+    0b010: "MIDDLE",
+    0b100: "LEFT",
+    0b011: "RIGHT_MID",
+    0b110: "LEFT_MID",
+    0b101: "LEFT_RIGHT",
+    0b111: "WALL",
+}
+
 # Helper functions
 def normalize_vector(vector):
     sum_of_squares = sum(x**2 for x in vector)
@@ -57,6 +68,8 @@ class Robot(NodePath):
 
         self.sim = scene.sim
         self.node = scene.node
+        
+        self.obstacle_points = []
 
         self.serial = None
         if not self.sim:
@@ -92,6 +105,7 @@ class Robot(NodePath):
             return False
         
         self.scene.node.send("navigation/status",{"status":"running"})
+        print(self.point_index, self.points)
         self.send_move_to_serial()
         return True
         
@@ -149,21 +163,59 @@ class Robot(NodePath):
         pos = self.getPos()
         pos = [pos[0], pos[1]]  # vector to list
         start = self.scene.sim_to_grid([pos[0], pos[1]])
-        points = aStarSearch(self.scene.grid, start, target)
-
-        if not len(points):
+        
+        grid_copy = [row[:] for row in self.scene.grid]
+        for p in self.obstacle_points:
+            grid_copy[p[1],[0]] = 0
+        
+        points = aStarSearch(grid_copy, start, target)
+        
+        if len(points) < 2:
             return []
 
         if self.scene.show:
             self.scene.gridVisualizer.pathOverlay.show_path(points)
             
-        self.scene.export_path_image(self.scene.grid,start,target,points)
-
         
         points = [self.scene.grid_to_sim(p) for p in points] # convert back to simulation space
+        points = self.limit_waypoint_distance(points,10)
         points[0] = pos # replace first estimated point with actual position
         return points
 
+    def limit_waypoint_distance(self, path, max_distance=5.0):
+
+        if len(path) < 2:
+            return path
+
+        new_path = [path[0]]
+
+        for i in range(len(path)-1):
+
+            p1 = path[i]
+            p2 = path[i+1]
+
+            dx = p2[0] - p1[0]
+            dy = p2[1] - p1[1]
+
+            distance = math.sqrt(dx*dx + dy*dy)
+
+            if distance <= max_distance:
+                new_path.append(p2)
+                continue
+
+            # number of segments required
+            segments = math.ceil(distance / max_distance)
+
+            for j in range(1, segments + 1):
+
+                t = j / segments
+
+                x = p1[0] + dx * t
+                y = p1[1] + dy * t
+
+                new_path.append((x, y))
+
+        return new_path
 
     def angle_to_face_target(self, current, target):
         angle_to_target = angle_between_points(current, target)
@@ -174,6 +226,10 @@ class Robot(NodePath):
             rotation_angle += 360
             
         return rotation_angle
+    
+    def handle_obstacle(self, location, distance):
+        
+        pass
         
     def update(self):
         if self.sim:

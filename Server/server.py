@@ -22,6 +22,8 @@ sio = socketio.AsyncServer(cors_allowed_origins="*")
 app = web.Application()
 sio.attach(app)
 
+remoteClientHandler = RemoteClientHandler(sio)
+
 def handle_exit(signum, frame):
     """Handle termination signals."""
     print("\nReceived exit signal, shutting down...")
@@ -80,21 +82,13 @@ async def start_shutdown(sid):
     if platform == "RPI":
         await asyncio.sleep(2)
         os.system("sudo shutdown -h now")
-
-
-# REMOTE EVENT HANDLER
-# remoteClientHandler = RemoteClientHandler(sio)
-
-# async def status_broadcaster():
-#     while True:
-#         await remoteClientHandler.broadcast_status()
-#         await asyncio.sleep(2)
         
-# async def on_startup(app):
-#     app["broadcast_task"] = asyncio.create_task(
-#         status_broadcaster()
-#     )
-# app.on_startup.append(on_startup)
+@sio.event
+async def register_client(sid):
+    await remoteClientHandler.client_connected(sid)
+
+
+
 
 
 # FUNCTIONS

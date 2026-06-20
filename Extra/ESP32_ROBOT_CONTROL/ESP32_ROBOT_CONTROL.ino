@@ -1,7 +1,8 @@
 #include "globals.h"
 #include <ble.h>
 #include "HoverboardController.h"
-// #include "ObstacleDetection.h"
+#include "MPU.h"
+#include "ObstacleDetection.h"
 
 bool canMoveForward = true;
 bool piActive = false;
@@ -10,11 +11,14 @@ bool piActive = false;
 int batSendInterval =  5 * 1000;
 unsigned long batSendLast = 0;
 
+int yawSendInterval =   500;
+unsigned long yawSendLast = 0;
+
 // -------- PIN CONFIG --------
 
 #define VBAT 4
 #define LATCH 14
-#define SWITCH_IN 10
+#define SWITCH_IN 13
 
 // Serial1 → Board A + shared TX
 #define RX1_PIN 18
@@ -29,11 +33,17 @@ BLEModule ble;
 
 HoverboardController hover(Serial1, Serial2, ble);
 
-volatile bool shutdownRequested = false;
+// MPU mpu;
 
-void ICACHE_RAM_ATTR buttonISR() {
-  shutdownRequested = true;
-}
+bool shutdownRequested = false;
+
+unsigned long startupTime = 0;
+unsigned long buttonPressStart = 0;
+
+const unsigned long BUTTON_ARM_DELAY = 5000;     // 5 sec after boot
+const unsigned long BUTTON_LONG_PRESS = 2000;    // 2 sec hold
+
+bool buttonPressed = false;
 
 void onObstacleStop() {
    
@@ -82,6 +92,11 @@ void handleBluetoothInput(String cmd) {
     {
       hover.resetPose();
     }
+
+    // else if(cmd == "ry")
+    // {
+    //   mpu.reset();
+    // }
 
     // movement commands
 
@@ -177,6 +192,12 @@ void handleBluetoothInput(String cmd) {
     {
       float val = cmd.substring(2).toFloat();
       hover.setBrakePercent(val);
+    }
+
+    else if(cmd.startsWith("ds"))
+    {
+      float val = cmd.substring(2).toFloat();
+      setDistStop(val);
     }
 
     // ---- CHANGE MODES ----
@@ -422,12 +443,7 @@ void setup() {
     digitalWrite(LATCH, HIGH);
 
     pinMode(SWITCH_IN, INPUT_PULLUP);
-
-    attachInterrupt(
-      digitalPinToInterrupt(SWITCH_IN),
-      buttonISR,
-      FALLING
-    );
+    startupTime = millis();
 
     Serial.begin(115200); // debug / Pi
 
@@ -437,9 +453,15 @@ void setup() {
     // Serial2: RX only
     Serial2.begin(19200, SERIAL_8N1, RX2_PIN, TX2_UNUSED);
 
+
+    // ble.send("Calibrating MPU");
+    // mpu.begin();
+    // mpu.calibrate();
+    // ble.send("Calibration Complete");
+
     hover.loadCalibration();
 
-    // obstacleDetection_init(onObstacleStop,onObstacleClear);
+    obstacleDetection_init(onObstacleStop,onObstacleClear);
 
     neopixelWrite(RGB_BUILTIN, RGB_BRIGHTNESS, 0, 0);  // Red
     
@@ -448,6 +470,8 @@ void setup() {
     ble.onReceive = handleBluetoothInput;
 
     batSendLast = millis() - batSendInterval;
+    yawSendLast = millis() - yawSendInterval;
+
 
     neopixelWrite(RGB_BUILTIN, 0, RGB_BRIGHTNESS, 0);  // Green
 
@@ -460,10 +484,25 @@ void loop() {
     // update hover
     hover.update();
 
+    // update MPU
+    // mpu.update();
+
+    // // update battery
+    // if(now - yawSendLast >= yawSendInterval)
+    // {
+    //   float yaw = mpu.readYaw();
+      
+      
+    //   ble.send("Bat: "+String(yaw)+"V");
+    //   yawSendLast = now;
+      
+      
+    // }
+
     // update battery
     if(now - batSendLast >= batSendInterval)
     {
-      float batVoltage = hover.getBattery();
+      float batVoltage = analogRead(VBAT);
       
       if(batVoltage > 0)
       {
@@ -473,17 +512,54 @@ void loop() {
       
     }
 
-    if (shutdownRequested) {
-      Serial.println("Shutdown requested");
+    // Ignore button shortly after startup
+    if (millis() - startupTime > BUTTON_ARM_DELAY)
+    {
+        bool currentState = digitalRead(SWITCH_IN) == LOW;
 
-      delay(100);
+        if (currentState && !buttonPressed)
+        {
+            // Press started
+            buttonPressed = true;
+            buttonPressStart = millis();
+        }
+        else if (!currentState && buttonPressed)
+        {
+            // Released
+            buttonPressed = false;
+        }
 
-      digitalWrite(LATCH, LOW);
+        // Long press detected
+        if (buttonPressed &&
+            !shutdownRequested &&
+            millis() - buttonPressStart >= BUTTON_LONG_PRESS)
+        {
+          neopixelWrite(RGB_BUILTIN, RGB_BRIGHTNESS, RGB_BRIGHTNESS, 0);  // Red
+            shutdownRequested = true;
 
-      while (true) {
-        delay(1000);
-      }
+            Serial.println("shutdown");
+
+            // If communicating with Pi on UART:
+            // Serial.write("shutdown\n");
+
+            Serial.println("Shutdown requested from button");
+        }
     }
 
-    // obstacleDetection_update();
+    if (shutdownRequested)
+    {
+        Serial.println("Shutdown ready");
+
+        delay(100);
+
+        neopixelWrite(RGB_BUILTIN, RGB_BRIGHTNESS, 0, 0);  // Red
+        digitalWrite(LATCH, LOW);
+
+        while (true)
+        {
+            delay(1000);
+        }
+    }
+
+    obstacleDetection_update();
 }

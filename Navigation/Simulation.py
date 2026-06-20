@@ -27,7 +27,7 @@ confVars = """
 """
 loadPrcFileData("", confVars)
 
-mapDir = "./map/test/test"
+mapDir = "./map/test/electra"
 robotSize = 0
 
 class Simulation(ShowBase):
@@ -61,6 +61,7 @@ class Simulation(ShowBase):
         
         if self.show:
             self.gridVisualizer = GridVisualizer(self)
+            self.orbitCamera = OrbitCamera(base,self.robot)
 
         # set robot starting position
         robot_position = self.robot.getPos()
@@ -135,6 +136,8 @@ class Simulation(ShowBase):
 
         self.node.subscribe("camera/tag_found", handle_tag_found)
         self.node.subscribe("navigation/command", handle_navigation_command)
+        
+        self.robot.navigate_to_location("start")
 
     # ------------------ Core update ------------------
 
@@ -155,8 +158,6 @@ class Simulation(ShowBase):
             f"Battery level: {int(self.robot.status.batteryLevel)}%"
         )
         
-        self.pos_label.hide()
-
         return task.cont
 
     # ------------------ Coordinate conversions ------------------
